@@ -157,6 +157,18 @@ TELEGRAM_BOT_TOKEN=123456:ABC...
 TELEGRAM_CHAT_ID=123456789
 ```
 
+Email via SMTP:
+
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USE_TLS=true
+SMTP_USERNAME=your_email@example.com
+SMTP_PASSWORD=your_app_password
+EMAIL_FROM=your_email@example.com
+EMAIL_TO=operator@example.com,backup@example.com
+```
+
 Daily run notifications include completed states, failed states, generated video paths, YouTube links when available, and summary paths.
 
 ## VPS Deployment
