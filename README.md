@@ -95,12 +95,14 @@ output/runs/YYYY-MM-DD/<state>/
   voiceover.mp3
   video.mp4
 output/runs/YYYY-MM-DD/summary.json
+output/runs/YYYY-MM-DD/review.html
 logs/summary_YYYY-MM-DD.json
 logs/run_YYYY-MM-DD.log
 logs/scraper_debug/YYYY-MM-DD/
 ```
 
 The summary JSON includes artifact paths, validation status, upload status, video size, audio duration, and errors when present.
+Open `output/runs/YYYY-MM-DD/review.html` in a browser for a compact review page with artifact links and thumbnails.
 If GoodReturns changes its page structure, the scraper saves failed city HTML and table summaries in `logs/scraper_debug/YYYY-MM-DD/` for diagnosis.
 
 ## Uploading
@@ -157,7 +159,7 @@ TELEGRAM_BOT_TOKEN=123456:ABC...
 TELEGRAM_CHAT_ID=123456789
 ```
 
-Daily run notifications include completed states, failed states, generated video paths, YouTube links when available, and summary paths.
+Daily run notifications include completed states, failed states, generated video paths, YouTube links when available, summary paths, and the review page path.
 
 ## VPS Deployment
 

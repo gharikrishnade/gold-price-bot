@@ -54,6 +54,7 @@ from youtube_uploader import upload_video
 from price_validator import validate_state_price_data
 from price_history import build_history_context, store_price_data
 from notifier import notifications_enabled, send_run_notification
+from review_page import write_review_page
 
 RUN_OUTPUT_DIR = os.environ.get("RUN_OUTPUT_DIR", "output/runs")
 UPLOAD_HISTORY_FILE = Path(LOG_DIR) / "upload_history.json"
@@ -431,6 +432,17 @@ def main(argv: list[str] | None = None):
         json.dumps(all_results, indent=2, ensure_ascii=False, default=str),
         encoding="utf-8",
     )
+    review_page_path = _run_artifact_dir() / "review.html"
+    try:
+        write_review_page(
+            all_results,
+            output_path=review_page_path,
+            summary_path=summary_path,
+            review_summary_path=str(review_summary_path),
+        )
+    except Exception as e:
+        logger.warning(f"Could not write review page: {e}")
+        review_page_path = None
 
     success = [
         k for k, v in all_results.items()
@@ -445,6 +457,8 @@ def main(argv: list[str] | None = None):
     logger.info(f"❌ Failed  ({len(failed)}):  {', '.join(failed) or 'none'}")
     logger.info(f"Summary: {summary_path}")
     logger.info(f"Review summary: {review_summary_path}")
+    if review_page_path:
+        logger.info(f"Review page: {review_page_path}")
 
     if args.no_notify:
         logger.info("Notifications skipped by --no-notify")
@@ -453,6 +467,7 @@ def main(argv: list[str] | None = None):
             all_results,
             summary_path=summary_path,
             review_summary_path=str(review_summary_path),
+            review_page_path=str(review_page_path) if review_page_path else None,
         )
         logger.info(f"Notification status: {notification_status}")
     else:
