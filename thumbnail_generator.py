@@ -178,25 +178,28 @@ def _build_html(language, state_key, price_data, width, height):
   body {{
     width: {width}px; height: {height}px; overflow: hidden;
     font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
-    background: #160c02;
+    background: #111827;
   }}
 
   .wrapper {{
     display: flex;
     width: {width}px;
     height: {height}px;
+    background:
+      linear-gradient(120deg, rgba(17,24,39,.96), rgba(17,24,39,.9)),
+      repeating-linear-gradient(74deg, rgba(59,130,246,.16) 0 1px, transparent 1px {px(96)});
   }}
 
   /* ── LEFT COLUMN ── */
   .left {{
     width: {px(265)};
     height: {height}px;
-    background: #160c02;
+    background: #0b1020;
     display: flex;
     flex-direction: column;
     align-items: center;
     flex-shrink: 0;
-    border-right: {px(3)} solid #B8860B;
+    border-right: {px(3)} solid #334155;
   }}
 
   .coin-area {{
@@ -243,35 +246,35 @@ def _build_html(language, state_key, price_data, width, height):
   .gold-label {{
     font-size: {px(15)};
     font-weight: 900;
-    color: #FFD700;
+    color: #f6c453;
     letter-spacing: {px(1)};
     text-align: center;
   }}
   .lang-native {{
     font-family: {regional_font}, sans-serif;
     font-size: {px(17)};
-    color: #A07808;
+    color: #94a3b8;
     text-align: center;
   }}
 
   .date-box {{
     width: 100%;
-    background: #2A1802;
+    background: #1f2937;
     text-align: center;
     padding: {px(14)} {px(8)} {px(18)};
-    border-top: {px(2)} solid #8B6400;
+    border-top: {px(2)} solid #334155;
   }}
   .date-label {{
     font-size: {px(12)};
     font-weight: 700;
-    color: #8B6400;
+    color: #94a3b8;
     letter-spacing: {px(2)};
     margin-bottom: {px(4)};
   }}
   .date-value {{
     font-size: {px(20)};
     font-weight: 900;
-    color: #FFD700;
+    color: #f6c453;
   }}
 
   /* ── RIGHT AREA ── */
@@ -279,7 +282,7 @@ def _build_html(language, state_key, price_data, width, height):
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(160deg, #DAA520 0%, #B8850A 100%);
+    background: transparent;
   }}
 
   .content {{
@@ -301,7 +304,7 @@ def _build_html(language, state_key, price_data, width, height):
     font-family: {regional_font}, sans-serif;
     font-size: {px(title_font_size)};
     font-weight: 700;
-    color: #1A0C00;
+    color: #fff7db;
     line-height: 1.1;
     margin-bottom: {px(4)};
     max-width: 100%;
@@ -311,7 +314,7 @@ def _build_html(language, state_key, price_data, width, height):
   .sub-title {{
     font-size: {px(subtitle_font_size)};
     font-weight: 600;
-    color: #3A1E00;
+    color: #cbd5e1;
     max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
@@ -320,7 +323,7 @@ def _build_html(language, state_key, price_data, width, height):
 
   .divider {{
     height: {px(2)};
-    background: linear-gradient(to right, transparent, #8B6400 30%, #8B6400 70%, transparent);
+    background: linear-gradient(to right, transparent, #334155 30%, #334155 70%, transparent);
     margin-bottom: {px(12)};
   }}
 
@@ -335,23 +338,25 @@ def _build_html(language, state_key, price_data, width, height):
   .card {{
     flex: 1;
     min-width: 0;
-    border-radius: {px(14)};
+    border-radius: {px(20)};
     display: flex;
     flex-direction: column;
     align-items: center;
     overflow: hidden;
     padding-bottom: {px(18)};
+    border: {px(2)} solid #475569;
+    box-shadow: 0 {px(18)} {px(30)} rgba(0,0,0,.35);
   }}
-  .card-22 {{ background: #1C1204; }}
-  .card-24 {{ background: #380404; }}
+  .card-22 {{ background: rgba(31,41,55,.96); }}
+  .card-24 {{ background: rgba(31,41,55,.96); }}
 
   .card-bar {{
     width: 100%; height: {px(8)};
     flex-shrink: 0;
     margin-bottom: {px(14)};
   }}
-  .card-22 .card-bar {{ background: #DAA520; }}
-  .card-24 .card-bar {{ background: #C01818; }}
+  .card-22 .card-bar {{ background: #22c55e; }}
+  .card-24 .card-bar {{ background: #f59e0b; }}
 
   .carat-lbl {{
     font-size: {px(24)};
@@ -359,8 +364,8 @@ def _build_html(language, state_key, price_data, width, height):
     letter-spacing: {px(2)};
     margin-bottom: {px(8)};
   }}
-  .card-22 .carat-lbl {{ color: #DAA520; }}
-  .card-24 .carat-lbl {{ color: #FF8888; }}
+  .card-22 .carat-lbl {{ color: #22c55e; }}
+  .card-24 .carat-lbl {{ color: #f59e0b; }}
 
   .price-num {{
     font-size: clamp({px(72)}, {px(96)}, {px(96)});
@@ -379,16 +384,16 @@ def _build_html(language, state_key, price_data, width, height):
     font-weight: 700;
     margin-bottom: {px(12)};
   }}
-  .card-22 .per-gram {{ color: #DAA520; }}
-  .card-24 .per-gram {{ color: #FF9090; }}
+  .card-22 .per-gram {{ color: #22c55e; }}
+  .card-24 .per-gram {{ color: #f59e0b; }}
 
   .card-sep {{
     width: calc(100% - {px(40)});
     height: 1px;
     margin-bottom: {px(12)};
   }}
-  .card-22 .card-sep {{ background: rgba(180,140,0,0.35); }}
-  .card-24 .card-sep {{ background: rgba(180,60,60,0.35); }}
+  .card-22 .card-sep {{ background: rgba(148,163,184,0.25); }}
+  .card-24 .card-sep {{ background: rgba(148,163,184,0.25); }}
 
   .price-10g {{
     font-size: {px(22)};
@@ -399,8 +404,8 @@ def _build_html(language, state_key, price_data, width, height):
     overflow: hidden;
     text-overflow: ellipsis;
   }}
-  .card-22 .price-10g {{ color: #907040; }}
-  .card-24 .price-10g {{ color: #906060; }}
+  .card-22 .price-10g {{ color: #cbd5e1; }}
+  .card-24 .price-10g {{ color: #cbd5e1; }}
 
   .grade-lbl {{
     font-family: {regional_font}, sans-serif;
@@ -409,24 +414,24 @@ def _build_html(language, state_key, price_data, width, height):
     text-align: center;
     overflow-wrap: anywhere;
   }}
-  .card-22 .grade-lbl {{ color: #6A5030; }}
-  .card-24 .grade-lbl {{ color: #6A3030; }}
+  .card-22 .grade-lbl {{ color: #94a3b8; }}
+  .card-24 .grade-lbl {{ color: #94a3b8; }}
 
   /* ── BOTTOM BAR ── */
   .bottom-bar {{
-    background: #160c02;
+    background: #0f172a;
     height: {px(78)};
     display: flex;
     align-items: center;
     padding: 0 {px(16)} 0 {px(20)};
-    border-top: {px(2)} solid #8B6400;
+    border-top: {px(2)} solid #334155;
     flex-shrink: 0;
     gap: {px(12)};
   }}
   .cities {{
     font-family: {regional_font}, sans-serif;
     font-size: {px(cities_font_size)};
-    color: #DAA520;
+    color: #f6c453;
     flex: 1;
     min-width: 0;
     text-align: center;
@@ -435,8 +440,8 @@ def _build_html(language, state_key, price_data, width, height):
     text-overflow: ellipsis;
   }}
   .sub-btn {{
-    background: #C01010;
-    color: #fff;
+    background: #f6c453;
+    color: #111827;
     border-radius: {px(8)};
     padding: {px(10)} {px(18)};
     font-size: {px(16)};
@@ -594,26 +599,25 @@ def _render_pil_fallback(language, state_key, price_data, output_path, width, he
     city_names = [city_trans.get(c, c) for c in city_keys]
 
     lw = int(265*sc); bh = int(78*sc)
-    img = Image.new("RGB", (width, height), (22,12,2))
+    img = Image.new("RGB", (width, height), (17,24,39))
     draw = ImageDraw.Draw(img)
-    # gold bg
     for y in range(height-bh):
         t = y/max(1,height-bh)
-        draw.line([(lw,y),(width,y)], fill=(int(218-20*t),int(165-35*t),int(32+10*t)))
-    draw.rectangle([(0,0),(lw,height)], fill=(22,12,2))
-    draw.rectangle([(lw-3,0),(lw,height-bh)], fill=(184,134,11))
+        draw.line([(lw,y),(width,y)], fill=(int(17+5*t),int(24+10*t),int(39+15*t)))
+    draw.rectangle([(0,0),(lw,height)], fill=(11,16,32))
+    draw.rectangle([(lw-3,0),(lw,height-bh)], fill=(51,65,85))
     # title
     cx = lw+(width-lw)//2
-    draw.text((cx,int(62*sc)), s["title"], font=fnt(reg,int(70*sc)), fill=(26,12,0), anchor="mm")
+    draw.text((cx,int(62*sc)), s["title"], font=fnt(reg,int(70*sc)), fill=(255,247,219), anchor="mm")
     subtitle = "Today's Gold Rate — "+STATE_DISPLAY.get(state_key, state_key.replace("_"," ").title())
-    draw.text((cx,int(108*sc)), subtitle, font=fnt(latin,int(19*sc)), fill=(58,30,0), anchor="mm")
-    draw.line([(lw+int(18*sc),int(124*sc)),(width-int(18*sc),int(124*sc))], fill=(139,100,0), width=2)
+    draw.text((cx,int(108*sc)), subtitle, font=fnt(latin,int(19*sc)), fill=(203,213,225), anchor="mm")
+    draw.line([(lw+int(18*sc),int(124*sc)),(width-int(18*sc),int(124*sc))], fill=(51,65,85), width=2)
     # cards
     gap=int(18*sc); cy=int(134*sc); ch=int(500*sc)
     cw=(width-lw-gap*3)//2; x22=lw+gap; x24=x22+cw+gap
     for x,bg,acc,lbl,p,p10,cs in [
-        (x22,(28,18,4),(218,165,32),"22 CARAT",p22g,p22_10,s["c22"]),
-        (x24,(56,4,4),(192,24,24),"24 CARAT",p24g,p24_10,s["c24"]),
+        (x22,(31,41,55),(34,197,94),"22 CARAT",p22g,p22_10,s["c22"]),
+        (x24,(31,41,55),(245,158,11),"24 CARAT",p24g,p24_10,s["c24"]),
     ]:
         draw.rounded_rectangle([(x,cy),(x+cw,cy+ch)], radius=int(14*sc), fill=bg)
         draw.rounded_rectangle([(x,cy),(x+cw,cy+int(8*sc))], radius=int(5*sc), fill=acc)
@@ -621,32 +625,32 @@ def _render_pil_fallback(language, state_key, price_data, output_path, width, he
         draw.text((m,cy+int(38*sc)), lbl, font=fnt(latin,int(24*sc)), fill=acc, anchor="mm")
         draw.text((m,cy+int(175*sc)), f"{p:,}", font=fnt(latin,int(96*sc)), fill=(255,255,255), anchor="mm")
         draw.text((m,cy+int(245*sc)), "₹ per gram", font=fnt(latin,int(22*sc)), fill=acc, anchor="mm")
-        draw.line([(x+int(28*sc),cy+int(272*sc)),(x+cw-int(28*sc),cy+int(272*sc))], fill=(100,80,0), width=1)
-        draw.text((m,cy+int(315*sc)), f"₹{p10:,} / 10 grams", font=fnt(latin,int(22*sc)), fill=(130,110,70), anchor="mm")
-        draw.text((m,cy+int(360*sc)), f"{cs} · Jewellery" if "22" in lbl else f"{cs} · Investment", font=fnt(reg,int(17*sc)), fill=(100,80,50), anchor="mm")
+        draw.line([(x+int(28*sc),cy+int(272*sc)),(x+cw-int(28*sc),cy+int(272*sc))], fill=(71,85,105), width=1)
+        draw.text((m,cy+int(315*sc)), f"₹{p10:,} / 10 grams", font=fnt(latin,int(22*sc)), fill=(203,213,225), anchor="mm")
+        draw.text((m,cy+int(360*sc)), f"{cs} · Jewellery" if "22" in lbl else f"{cs} · Investment", font=fnt(reg,int(17*sc)), fill=(148,163,184), anchor="mm")
     # bottom
     by=height-bh
-    draw.rectangle([(lw,by),(width,height)], fill=(22,12,2))
-    draw.line([(lw,by),(width,by)], fill=(139,100,0), width=2)
-    draw.text(((lw+width-int(160*sc))//2,by+bh//2), "  ·  ".join(city_names), font=fnt(reg,int(22*sc)), fill=(218,165,32), anchor="mm")
+    draw.rectangle([(lw,by),(width,height)], fill=(15,23,42))
+    draw.line([(lw,by),(width,by)], fill=(51,65,85), width=2)
+    draw.text(((lw+width-int(160*sc))//2,by+bh//2), "  ·  ".join(city_names), font=fnt(reg,int(22*sc)), fill=(246,196,83), anchor="mm")
     bw,bhh=int(150*sc),int(38*sc)
     bx=width-bw-int(14*sc); bby=by+(bh-bhh)//2
-    draw.rounded_rectangle([(bx,bby),(bx+bw,bby+bhh)], radius=int(7*sc), fill=(192,16,16))
-    draw.text((bx+bw//2,bby+bhh//2), "▶  SUBSCRIBE", font=fnt(latin,int(16*sc)), fill=(255,255,255), anchor="mm")
+    draw.rounded_rectangle([(bx,bby),(bx+bw,bby+bhh)], radius=int(7*sc), fill=(246,196,83))
+    draw.text((bx+bw//2,bby+bhh//2), "▶  SUBSCRIBE", font=fnt(latin,int(16*sc)), fill=(17,24,39), anchor="mm")
     # date box
     dbh=int(86*sc); dby=height-bh-dbh
-    draw.rectangle([(0,dby),(lw-3,height-bh)], fill=(42,24,4))
-    draw.line([(0,dby),(lw-3,dby)], fill=(139,100,0), width=2)
-    draw.text((lw//2,dby+int(18*sc)), "DATE", font=fnt(latin,int(12*sc)), fill=(139,100,0), anchor="mm")
-    draw.text((lw//2,dby+int(52*sc)), date_str, font=fnt(latin,int(20*sc)), fill=(255,215,0), anchor="mm")
+    draw.rectangle([(0,dby),(lw-3,height-bh)], fill=(31,41,55))
+    draw.line([(0,dby),(lw-3,dby)], fill=(51,65,85), width=2)
+    draw.text((lw//2,dby+int(18*sc)), "DATE", font=fnt(latin,int(12*sc)), fill=(148,163,184), anchor="mm")
+    draw.text((lw//2,dby+int(52*sc)), date_str, font=fnt(latin,int(20*sc)), fill=(246,196,83), anchor="mm")
     # coin
     coin_r=int(72*sc); ccx=lw//2; ccy=int(248*sc)
     draw.ellipse([(ccx-coin_r,ccy-coin_r),(ccx+coin_r,ccy+coin_r)], fill=(160,110,5))
     draw.ellipse([(ccx-int(coin_r*.88),ccy-int(coin_r*.88)),(ccx+int(coin_r*.88),ccy+int(coin_r*.88))], fill=(218,165,32))
     draw.ellipse([(ccx-int(coin_r*.70),ccy-int(coin_r*.70)),(ccx+int(coin_r*.70),ccy+int(coin_r*.70))], fill=(140,95,0))
     draw.text((ccx,ccy+int(coin_r*.06)), "₹", font=fnt(latin,int(coin_r*.75)), fill=(255,235,100), anchor="mm")
-    draw.text((lw//2,ccy+coin_r+int(20*sc)), "GOLD UPDATES", font=fnt(latin,int(14*sc)), fill=(255,215,0), anchor="mm")
-    draw.text((lw//2,ccy+coin_r+int(40*sc)), s["native"], font=fnt(reg,int(16*sc)), fill=(160,120,10), anchor="mm")
+    draw.text((lw//2,ccy+coin_r+int(20*sc)), "GOLD UPDATES", font=fnt(latin,int(14*sc)), fill=(246,196,83), anchor="mm")
+    draw.text((lw//2,ccy+coin_r+int(40*sc)), s["native"], font=fnt(reg,int(16*sc)), fill=(148,163,184), anchor="mm")
 
     img.save(output_path, "JPEG", quality=95)
     logger.info(f"Thumbnail saved via PIL fallback ({width}×{height}): {output_path}")
