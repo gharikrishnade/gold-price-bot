@@ -107,11 +107,13 @@ def build_history_context(
                     city_comparisons[city] = comparison
 
         weekly_summary = _weekly_trend_summary(conn, state_key, run_date)
+        trend_series = _trend_series(conn, state_key, run_date, price_data)
         return {
             "has_comparison": bool(previous_date and city_comparisons),
             "previous_available_date": previous_date,
             "city_comparisons": city_comparisons,
             "weekly_summary": weekly_summary,
+            "trend_series": trend_series,
         }
     finally:
         conn.close()
@@ -215,6 +217,66 @@ def _weekly_trend_summary(conn: sqlite3.Connection, state_key: str, run_date: st
         }
 
     return trends or None
+
+
+def _trend_series(
+    conn: sqlite3.Connection,
+    state_key: str,
+    run_date: str,
+    price_data: dict[str, Any],
+    *,
+    max_points: int = 7,
+) -> list[dict[str, Any]]:
+    """Return recent average 22K/24K prices, ending with the current validated run."""
+    prior_rows = conn.execute(
+        """
+        SELECT run_date, karat, AVG(per_gram) AS avg_per_gram
+        FROM price_history
+        WHERE state_key = ? AND run_date < ?
+        GROUP BY run_date, karat
+        ORDER BY run_date DESC
+        LIMIT ?
+        """,
+        (state_key, run_date, (max_points - 1) * 2),
+    ).fetchall()
+
+    by_date: dict[str, dict[str, float]] = {}
+    for row in prior_rows:
+        by_date.setdefault(row["run_date"], {})[row["karat"]] = round(float(row["avg_per_gram"]), 2)
+
+    current = _current_average_prices(price_data)
+    if current:
+        by_date[run_date] = current
+
+    series = [
+        {"date": date_key, **values}
+        for date_key, values in sorted(by_date.items())
+        if "22k" in values and "24k" in values
+    ]
+    return series[-max_points:]
+
+
+def _current_average_prices(price_data: dict[str, Any]) -> dict[str, float] | None:
+    cities = price_data.get("cities", {})
+    if not cities:
+        return None
+
+    totals = {"22k": 0.0, "24k": 0.0}
+    count = 0
+    for prices in cities.values():
+        try:
+            totals["22k"] += float(prices["22k_per_gram"])
+            totals["24k"] += float(prices["24k_per_gram"])
+            count += 1
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    if not count:
+        return None
+    return {
+        "22k": round(totals["22k"] / count, 2),
+        "24k": round(totals["24k"] / count, 2),
+    }
 
 
 def _direction(change: float) -> str:

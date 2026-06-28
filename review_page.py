@@ -264,6 +264,7 @@ def _state_section(state_key: str, result: dict[str, Any], output_dir: Path) -> 
     <dt>Script</dt><dd>{escape(str(result.get("script_generation_status", "unknown")))}</dd>
     <dt>Audio</dt><dd>{escape(str(result.get("audio_status", "unknown")))}{_optional_suffix(result.get("audio_duration_seconds"), "s")}</dd>
     <dt>Video</dt><dd>{escape(str(result.get("video_status", "unknown")))}{_optional_suffix(result.get("video_size_mb"), " MB")}</dd>
+    <dt>Trend Cards</dt><dd>{escape(str(result.get("trend_cards_status", "not_requested")))}</dd>
     <dt>Shorts</dt><dd>{escape(str(result.get("shorts_status", "not_requested")))}{_optional_suffix(result.get("shorts_video_size_mb"), " MB")}</dd>
     <dt>Upload</dt><dd>{escape(str(result.get("upload_status", "unknown")))}{_skip_reason(result)}</dd>
     <dt>Approval</dt><dd>{_approval_status(result, output_dir)}</dd>
@@ -297,6 +298,7 @@ def _artifact_links(result: dict[str, Any], output_dir: Path) -> str:
         ("Script", result.get("script_path")),
         ("Thumbnail", result.get("thumbnail_path")),
         ("Audio", result.get("audio_path")),
+        ("Trend Preview", result.get("trend_preview_path")),
         ("Video", result.get("video_path")),
         ("Shorts", result.get("shorts_video_path")),
         ("YouTube", result.get("youtube_url")),
@@ -377,5 +379,5 @@ def _plain_path_link(path: str, output_dir: Path) -> str:
 
 
 def _artifact_count(all_results: dict[str, dict[str, Any]]) -> int:
-    keys = ("script_path", "thumbnail_path", "audio_path", "video_path", "shorts_video_path")
+    keys = ("script_path", "thumbnail_path", "audio_path", "trend_preview_path", "video_path", "shorts_video_path")
     return sum(1 for result in all_results.values() for key in keys if result.get(key))

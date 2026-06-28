@@ -92,6 +92,12 @@ Generate an additional vertical 9:16 MP4 for Shorts/Reels review:
 python main.py --state telangana --dry-run --shorts
 ```
 
+Generate an animated regional-language trend-card segment when historical prices exist:
+
+```bash
+python main.py --state andhra_pradesh --dry-run --trend-cards
+```
+
 Generated files are grouped by date and state:
 
 ```text
@@ -99,6 +105,7 @@ output/runs/YYYY-MM-DD/<state>/
   script.txt
   thumbnail.jpg
   voiceover.mp3
+  trend_preview.jpg     # only when --trend-cards has history
   video.mp4
   shorts.mp4            # only when --shorts is used
 output/runs/YYYY-MM-DD/summary.json
@@ -108,8 +115,8 @@ logs/run_YYYY-MM-DD.log
 logs/scraper_debug/YYYY-MM-DD/
 ```
 
-The summary JSON includes artifact paths, validation status, upload status, video size, optional Shorts/Reels status, audio duration, YouTube metadata preview, and errors when present.
-Open `output/runs/YYYY-MM-DD/review.html` in a browser for a compact review page with artifact links, thumbnails, optional Shorts/Reels output, and YouTube title/description/tags.
+The summary JSON includes artifact paths, validation status, upload status, video size, optional trend-card and Shorts/Reels status, audio duration, YouTube metadata preview, and errors when present.
+Open `output/runs/YYYY-MM-DD/review.html` in a browser for a compact review page with artifact links, thumbnails, optional trend-card preview, optional Shorts/Reels output, and YouTube title/description/tags.
 If GoodReturns changes its page structure, the scraper saves failed city HTML and table summaries in `logs/scraper_debug/YYYY-MM-DD/` for diagnosis.
 
 ## Uploading

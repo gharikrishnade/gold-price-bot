@@ -49,7 +49,7 @@ from scraper import get_state_prices
 from script_generator import generate_script
 from thumbnail_generator import check_required_fonts, generate_thumbnail
 from tts_generator import generate_voiceover
-from video_creator import create_vertical_video, create_video
+from video_creator import create_vertical_video, create_video, save_trend_preview
 from youtube_uploader import build_video_metadata, upload_video
 from price_validator import validate_state_price_data
 from price_history import build_history_context, store_price_data
@@ -77,6 +77,7 @@ def run_pipeline_for_state(
     privacy_status: str = DEFAULT_UPLOAD_PRIVACY,
     force_upload: bool = False,
     create_shorts: bool = False,
+    trend_cards: bool = False,
     require_approval: bool = DEFAULT_REQUIRE_UPLOAD_APPROVAL,
 ) -> dict:
     """Run the full pipeline for one state/channel."""
@@ -90,6 +91,7 @@ def run_pipeline_for_state(
         "dry_run": dry_run,
         "privacy_status": privacy_status,
         "create_shorts": create_shorts,
+        "trend_cards": trend_cards,
         "require_upload_approval": require_approval,
         "scrape_status": "pending",
         "price_validation_status": "pending",
@@ -97,6 +99,7 @@ def run_pipeline_for_state(
         "thumbnail_status": "pending",
         "audio_status": "pending",
         "video_status": "pending",
+        "trend_cards_status": "not_requested",
         "shorts_status": "not_requested",
         "history_storage_status": "pending",
         "upload_status": "pending",
@@ -111,7 +114,8 @@ def run_pipeline_for_state(
     logger.info(f"{'='*60}")
     logger.info(
         f"Run options for {state_key}: dry_run={dry_run}, skip_upload={skip_upload}, "
-        f"privacy={privacy_status}, shorts={create_shorts}, require_approval={require_approval}"
+        f"privacy={privacy_status}, shorts={create_shorts}, trend_cards={trend_cards}, "
+        f"require_approval={require_approval}"
     )
 
     # ── Step 1: Scrape gold prices ────────────────────────────────────────────
@@ -213,12 +217,29 @@ def run_pipeline_for_state(
     )
 
     try:
+        if trend_cards:
+            trend_preview_path = str(artifact_dir / "trend_preview.jpg")
+            preview_path = save_trend_preview(
+                thumbnail_path=thumb_for_video,
+                output_path=trend_preview_path,
+                price_data=price_data,
+                language=language,
+                state_key=state_key,
+            )
+            if preview_path:
+                result["trend_preview_path"] = preview_path
+                result["trend_cards_status"] = "success"
+            else:
+                result["trend_cards_status"] = "skipped_no_history"
+
         create_video(
             thumbnail_path=thumb_for_video,
             audio_path=audio_path,
             output_path=video_path,
             price_data=price_data,
             language=language,
+            state_key=state_key,
+            enable_trend_cards=trend_cards,
         )
         result["video_path"] = video_path
         size_mb = Path(video_path).stat().st_size / (1024 * 1024)
@@ -432,6 +453,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--skip-upload", action="store_true", help="Skip YouTube upload after local video generation.")
     parser.add_argument("--force-upload", action="store_true", help="Allow uploading even if this state/date was already uploaded.")
     parser.add_argument("--shorts", action="store_true", help="Also create a vertical 9:16 Shorts/Reels MP4.")
+    parser.add_argument("--trend-cards", action="store_true", help="Add an animated regional trend-card segment when price history exists.")
     parser.add_argument(
         "--require-approval",
         action=argparse.BooleanOptionalAction,
@@ -480,7 +502,7 @@ def main(argv: list[str] | None = None):
         f"Options: dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
         f"state={args.state or 'enabled'}, privacy={args.privacy}, "
         f"force_upload={args.force_upload}, require_approval={args.require_approval}, "
-        f"shorts={args.shorts}, notify={not args.no_notify}"
+        f"shorts={args.shorts}, trend_cards={args.trend_cards}, notify={not args.no_notify}"
     )
 
     if args.state:
@@ -506,6 +528,7 @@ def main(argv: list[str] | None = None):
             privacy_status=args.privacy,
             force_upload=args.force_upload,
             create_shorts=args.shorts,
+            trend_cards=args.trend_cards,
             require_approval=args.require_approval,
         )
         all_results[state_key] = result
