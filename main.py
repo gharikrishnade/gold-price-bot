@@ -53,6 +53,7 @@ from video_creator import create_video
 from youtube_uploader import upload_video
 from price_validator import validate_state_price_data
 from price_history import build_history_context, store_price_data
+from notifier import notifications_enabled, send_run_notification
 
 RUN_OUTPUT_DIR = os.environ.get("RUN_OUTPUT_DIR", "output/runs")
 UPLOAD_HISTORY_FILE = Path(LOG_DIR) / "upload_history.json"
@@ -352,6 +353,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Generate local artifacts but skip YouTube upload.")
     parser.add_argument("--skip-upload", action="store_true", help="Skip YouTube upload after local video generation.")
     parser.add_argument("--force-upload", action="store_true", help="Allow uploading even if this state/date was already uploaded.")
+    parser.add_argument("--no-notify", action="store_true", help="Do not send configured run notifications.")
     parser.add_argument("--state", help="Process only one state key from CHANNEL_CONFIG.")
     parser.add_argument(
         "--privacy",
@@ -391,7 +393,8 @@ def main(argv: list[str] | None = None):
     logger.info(f"🚀 Gold Price Bot starting — {today_str}")
     logger.info(
         f"Options: dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
-        f"state={args.state or 'enabled'}, privacy={args.privacy}, force_upload={args.force_upload}"
+        f"state={args.state or 'enabled'}, privacy={args.privacy}, "
+        f"force_upload={args.force_upload}, notify={not args.no_notify}"
     )
 
     if args.state:
@@ -442,6 +445,18 @@ def main(argv: list[str] | None = None):
     logger.info(f"❌ Failed  ({len(failed)}):  {', '.join(failed) or 'none'}")
     logger.info(f"Summary: {summary_path}")
     logger.info(f"Review summary: {review_summary_path}")
+
+    if args.no_notify:
+        logger.info("Notifications skipped by --no-notify")
+    elif notifications_enabled():
+        notification_status = send_run_notification(
+            all_results,
+            summary_path=summary_path,
+            review_summary_path=str(review_summary_path),
+        )
+        logger.info(f"Notification status: {notification_status}")
+    else:
+        logger.info("Notifications not configured; skipping")
 
     return 0 if not failed else 1
 
