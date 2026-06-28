@@ -214,7 +214,7 @@ DATA NOTE: {holiday_note}
 (The "/gram" above is only for brevity — follow the LANGUAGE RULES for how to say it.)
 
 WHAT TO SAY (keep it tight, in this order):
-1. A quick "{meta['greeting']}" + one short line welcoming viewers to today's gold rate.
+1. A quick "{meta['greeting']}" + one short line welcoming viewers to today's gold rate, and clearly state today's date ({date_str}).
 2. If it's a market holiday, say so in one short phrase.
 3. State today's 22K rate (per gram, and per 10 grams) and 24K rate (per gram, and per 10 grams). Say each figure once — do NOT repeat or pad.
 4. End with ONE short, friendly line asking viewers to SUBSCRIBE and turn on the bell for daily updates. This closing MUST be present.

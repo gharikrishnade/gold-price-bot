@@ -592,6 +592,13 @@ def _build_vertical_html(language, state_key, price_data, width, height):
     line-height: 1.12; overflow-wrap: anywhere; text-wrap: balance;
   }}
   .vsub {{ font-size: {px(30)}; font-weight: 600; color: #cbd5e1; }}
+  .vdate-top {{
+    margin-top: {px(6)};
+    display: inline-flex; align-items: center; align-self: center;
+    background: #1f2937; border: {px(2)} solid #334155; border-radius: {px(40)};
+    padding: {px(10)} {px(24)};
+    font-size: {px(26)}; font-weight: 800; color: #f6c453; letter-spacing: {px(1)};
+  }}
 
   /* ── CARDS (stacked) ── */
   .vcards {{ flex: 1; display: flex; flex-direction: column; gap: {px(34)}; min-height: 0; }}
@@ -629,8 +636,6 @@ def _build_vertical_html(language, state_key, price_data, width, height):
     color: #f6c453; font-weight: 700; text-align: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
   }}
-  .vfoot-row {{ display: flex; align-items: center; justify-content: center; gap: {px(20)}; }}
-  .vdate {{ font-size: {px(26)}; font-weight: 800; color: #94a3b8; }}
   .vsub-btn {{
     background: #f6c453; color: #111827; border-radius: {px(10)};
     padding: {px(14)} {px(26)}; font-size: {px(26)}; font-weight: 900; white-space: nowrap;
@@ -645,6 +650,7 @@ def _build_vertical_html(language, state_key, price_data, width, height):
     <div class="vgold-label">GOLD UPDATES &nbsp;·&nbsp; {s['native']}</div>
     <div class="vtitle">{s['title']}</div>
     <div class="vsub">{subtitle}</div>
+    <div class="vdate-top">{date_str}</div>
   </div>
 
   <div class="vcards">
@@ -654,10 +660,7 @@ def _build_vertical_html(language, state_key, price_data, width, height):
 
   <div class="vfoot">
     <div class="vcities">{cities_text}</div>
-    <div class="vfoot-row">
-      <div class="vdate">{date_str}</div>
-      <div class="vsub-btn">▶&nbsp; SUBSCRIBE</div>
-    </div>
+    <div class="vsub-btn">▶&nbsp; SUBSCRIBE</div>
   </div>
 
 </div>
