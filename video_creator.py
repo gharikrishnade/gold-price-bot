@@ -17,11 +17,12 @@ import tempfile
 import logging
 import numpy as np
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 
 logger = logging.getLogger(__name__)
 
 OUT_W, OUT_H = 1920, 1080
+SHORT_W, SHORT_H = 1080, 1920
 FPS = 24
 FADE_IN  = 1.2
 FADE_OUT = 1.5
@@ -165,6 +166,88 @@ def create_video(
 
     audio.close()
     return output_path
+
+
+def create_vertical_video(
+    thumbnail_path: str,
+    audio_path: str,
+    output_path: str,
+) -> str:
+    """
+    Create a vertical 9:16 video suitable for Shorts/Reels from the thumbnail + audio.
+
+    The horizontal thumbnail is used as a blurred full-frame background and a sharp
+    foreground card, preserving readability without requiring a separate vertical
+    thumbnail renderer.
+    """
+    VideoClip, AudioFileClip, CompositeVideoClip, apply_fades, set_audio, set_fps, ver = _import_moviepy()
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Loading audio for vertical video: {audio_path}")
+    audio = AudioFileClip(audio_path)
+    duration = audio.duration
+    logger.info(f"  Duration: {duration:.1f}s")
+
+    img_array = _build_vertical_frame(thumbnail_path)
+
+    def make_frame(t):
+        return img_array
+
+    base = VideoClip(make_frame, duration=duration)
+    base = set_fps(base, FPS)
+    base = apply_fades(base)
+    final = set_audio(base, audio)
+
+    tmp_audio = os.path.join(tempfile.gettempdir(), "mpy_tmp_audio_vertical.mp4")
+    logger.info(f"Rendering vertical video → {output_path}")
+    final.write_videofile(
+        output_path,
+        fps=FPS,
+        codec="libx264",
+        audio_codec="aac",
+        preset="fast",
+        ffmpeg_params=["-crf", "24"],
+        threads=4,
+        temp_audiofile=tmp_audio,
+        remove_temp=True,
+        logger=None,
+    )
+
+    size_mb = Path(output_path).stat().st_size / (1024 * 1024)
+    logger.info(f"  ✅ Done: {output_path} ({size_mb:.1f} MB, {duration:.1f}s)")
+    audio.close()
+    return output_path
+
+
+def _build_vertical_frame(thumbnail_path: str) -> np.ndarray:
+    source = Image.open(thumbnail_path).convert("RGB")
+
+    # Cover-crop background to 9:16, then blur/dim it so foreground stays readable.
+    bg_scale = max(SHORT_W / source.width, SHORT_H / source.height)
+    bg_size = (int(source.width * bg_scale), int(source.height * bg_scale))
+    background = source.resize(bg_size, Image.LANCZOS)
+    left = (background.width - SHORT_W) // 2
+    top = (background.height - SHORT_H) // 2
+    background = background.crop((left, top, left + SHORT_W, top + SHORT_H))
+    background = background.filter(ImageFilter.GaussianBlur(radius=22))
+    background = ImageEnhance.Brightness(background).enhance(0.42)
+
+    # Foreground keeps the original 16:9 card crisp and centered.
+    fg_width = int(SHORT_W * 0.92)
+    fg_height = int(fg_width * source.height / source.width)
+    foreground = source.resize((fg_width, fg_height), Image.LANCZOS)
+    x = (SHORT_W - fg_width) // 2
+    y = int(SHORT_H * 0.19)
+
+    canvas = background.convert("RGBA")
+    shadow = Image.new("RGBA", (fg_width + 32, fg_height + 32), (0, 0, 0, 0))
+    shadow_layer = Image.new("RGBA", (fg_width, fg_height), (0, 0, 0, 135))
+    shadow.paste(shadow_layer, (16, 16))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=14))
+    canvas.alpha_composite(shadow, (x - 16, y - 16))
+    canvas.paste(foreground.convert("RGBA"), (x, y))
+
+    return np.array(canvas.convert("RGB"))
 
 
 def create_all_videos(

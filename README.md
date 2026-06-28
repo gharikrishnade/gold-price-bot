@@ -86,6 +86,12 @@ Run a full local generation without upload:
 python main.py --state telangana --dry-run
 ```
 
+Generate an additional vertical 9:16 MP4 for Shorts/Reels review:
+
+```bash
+python main.py --state telangana --dry-run --shorts
+```
+
 Generated files are grouped by date and state:
 
 ```text
@@ -94,6 +100,7 @@ output/runs/YYYY-MM-DD/<state>/
   thumbnail.jpg
   voiceover.mp3
   video.mp4
+  shorts.mp4            # only when --shorts is used
 output/runs/YYYY-MM-DD/summary.json
 output/runs/YYYY-MM-DD/review.html
 logs/summary_YYYY-MM-DD.json
@@ -101,8 +108,8 @@ logs/run_YYYY-MM-DD.log
 logs/scraper_debug/YYYY-MM-DD/
 ```
 
-The summary JSON includes artifact paths, validation status, upload status, video size, audio duration, YouTube metadata preview, and errors when present.
-Open `output/runs/YYYY-MM-DD/review.html` in a browser for a compact review page with artifact links, thumbnails, and YouTube title/description/tags.
+The summary JSON includes artifact paths, validation status, upload status, video size, optional Shorts/Reels status, audio duration, YouTube metadata preview, and errors when present.
+Open `output/runs/YYYY-MM-DD/review.html` in a browser for a compact review page with artifact links, thumbnails, optional Shorts/Reels output, and YouTube title/description/tags.
 If GoodReturns changes its page structure, the scraper saves failed city HTML and table summaries in `logs/scraper_debug/YYYY-MM-DD/` for diagnosis.
 
 ## Uploading
