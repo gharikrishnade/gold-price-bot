@@ -12,6 +12,8 @@ Install Playwright once:
 import logging
 import tempfile
 import os
+import shutil
+import subprocess
 from pathlib import Path
 from datetime import date
 
@@ -19,13 +21,40 @@ logger = logging.getLogger(__name__)
 
 # ── Language data ─────────────────────────────────────────────────────────────
 LANG_STRINGS = {
-    "telugu":    {"title": "నేటి బంగారం ధర",        "native": "తెలుగు",   "c22": "22 కెరట్",  "c24": "24 కెరట్",  "font": "Kohinoor Telugu, Noto Sans Telugu"},
-    "tamil":     {"title": "இன்றைய தங்கம் விலை",   "native": "தமிழ்",    "c22": "22 கேரட்",  "c24": "24 கேரட்",  "font": "Kohinoor Tamil, Noto Sans Tamil"},
-    "kannada":   {"title": "ಇಂದಿನ ಚಿನ್ನದ ಬೆಲೆ",    "native": "ಕನ್ನಡ",   "c22": "22 ಕ್ಯಾರಟ್","c24": "24 ಕ್ಯಾರಟ್","font": "Kannada MN, Noto Sans Kannada"},
-    "malayalam": {"title": "ഇന്നത്തെ സ്വർണ്ണ വില", "native": "മലയാളം",  "c22": "22 കാരറ്റ്","c24": "24 കാരറ്റ്","font": "Malayalam MN, Noto Sans Malayalam"},
-    "hindi":     {"title": "आज का सोने का भाव",      "native": "हिंदी",    "c22": "22 कैरेट",  "c24": "24 कैरेट",  "font": "Kohinoor Devanagari, Noto Sans Devanagari"},
-    "marathi":   {"title": "आजचा सोन्याचा भाव",     "native": "मराठी",   "c22": "22 कॅरेट",  "c24": "24 कॅरेट",  "font": "Kohinoor Devanagari, Noto Sans Devanagari"},
-    "bengali":   {"title": "আজকের সোনার দাম",        "native": "বাংলা",   "c22": "22 ক্যারেট","c24": "24 ক্যারেট","font": "Bangla MN, Noto Sans Bengali"},
+    "telugu":    {"title": "నేటి బంగారం ధర",        "native": "తెలుగు",   "c22": "22 కెరట్",  "c24": "24 కెరట్",  "font": "Kohinoor Telugu, Telugu MN, Telugu Sangam MN, Noto Sans Telugu"},
+    "tamil":     {"title": "இன்றைய தங்கம் விலை",   "native": "தமிழ்",    "c22": "22 கேரட்",  "c24": "24 கேரட்",  "font": "Tamil MN, Tamil Sangam MN, Noto Sans Tamil"},
+    "kannada":   {"title": "ಇಂದಿನ ಚಿನ್ನದ ಬೆಲೆ",    "native": "ಕನ್ನಡ",   "c22": "22 ಕ್ಯಾರಟ್","c24": "24 ಕ್ಯಾರಟ್","font": "Kannada MN, Kannada Sangam MN, Noto Sans Kannada"},
+    "malayalam": {"title": "ഇന്നത്തെ സ്വർണ്ണ വില", "native": "മലയാളം",  "c22": "22 കാരറ്റ്","c24": "24 കാരറ്റ്","font": "Malayalam MN, Malayalam Sangam MN, Noto Sans Malayalam"},
+    "hindi":     {"title": "आज का सोने का भाव",      "native": "हिंदी",    "c22": "22 कैरेट",  "c24": "24 कैरेट",  "font": "Kohinoor Devanagari, Devanagari Sangam MN, Devanagari MT, Noto Sans Devanagari"},
+    "marathi":   {"title": "आजचा सोन्याचा भाव",     "native": "मराठी",   "c22": "22 कॅरेट",  "c24": "24 कॅरेट",  "font": "Kohinoor Devanagari, Devanagari Sangam MN, Devanagari MT, Noto Sans Devanagari"},
+    "bengali":   {"title": "আজকের সোনার দাম",        "native": "বাংলা",   "c22": "22 ক্যারেট","c24": "24 ক্যারেট","font": "Bangla MN, Bangla Sangam MN, Noto Sans Bengali"},
+}
+
+FONT_CANDIDATES = {
+    "telugu": ["Noto Sans Telugu", "Kohinoor Telugu", "Telugu MN", "Telugu Sangam MN"],
+    "tamil": ["Noto Sans Tamil", "Tamil MN", "Tamil Sangam MN"],
+    "kannada": ["Noto Sans Kannada", "Kannada MN", "Kannada Sangam MN"],
+    "malayalam": ["Noto Sans Malayalam", "Malayalam MN", "Malayalam Sangam MN"],
+    "hindi": ["Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Devanagari MT"],
+    "marathi": ["Noto Sans Devanagari", "Kohinoor Devanagari", "Devanagari Sangam MN", "Devanagari MT"],
+    "bengali": ["Noto Sans Bengali", "Bangla MN", "Bangla Sangam MN"],
+}
+
+SYSTEM_FONT_FILES = {
+    "Kohinoor Telugu": ["/System/Library/Fonts/KohinoorTelugu.ttc"],
+    "Telugu MN": ["/System/Library/Fonts/Supplemental/Telugu MN.ttc"],
+    "Telugu Sangam MN": ["/System/Library/Fonts/Supplemental/Telugu Sangam MN.ttc"],
+    "Tamil MN": ["/System/Library/Fonts/Supplemental/Tamil MN.ttc"],
+    "Tamil Sangam MN": ["/System/Library/Fonts/Supplemental/Tamil Sangam MN.ttc"],
+    "Kannada MN": ["/System/Library/Fonts/Kannada MN.ttc", "/System/Library/Fonts/KannadaMN.ttc"],
+    "Kannada Sangam MN": ["/System/Library/Fonts/Supplemental/Kannada Sangam MN.ttc"],
+    "Malayalam MN": ["/System/Library/Fonts/Malayalam MN.ttc", "/System/Library/Fonts/MalayalamMN.ttc"],
+    "Malayalam Sangam MN": ["/System/Library/Fonts/Supplemental/Malayalam Sangam MN.ttc"],
+    "Kohinoor Devanagari": ["/System/Library/Fonts/Kohinoor.ttc", "/System/Library/Fonts/KohinoorDevanagari.ttc"],
+    "Devanagari Sangam MN": ["/System/Library/Fonts/Supplemental/Devanagari Sangam MN.ttc"],
+    "Devanagari MT": ["/System/Library/Fonts/Supplemental/DevanagariMT.ttc"],
+    "Bangla MN": ["/System/Library/Fonts/Bangla MN.ttc", "/System/Library/Fonts/BanglaMN.ttc"],
+    "Bangla Sangam MN": ["/System/Library/Fonts/Supplemental/Bangla Sangam MN.ttc"],
 }
 
 STATE_DISPLAY = {
@@ -53,6 +82,66 @@ CITY_NAMES = {
 }
 
 
+def check_required_fonts(languages: list[str]) -> dict:
+    """Return installed/missing font candidates for thumbnail languages."""
+    results = {}
+    for language in sorted(set(languages)):
+        candidates = FONT_CANDIDATES.get(language, FONT_CANDIDATES["hindi"])
+        installed = [font for font in candidates if _font_available(font)]
+        results[language] = {
+            "ok": bool(installed),
+            "installed": installed,
+            "required_any_of": candidates,
+        }
+    return results
+
+
+def _font_available(font_name: str) -> bool:
+    for path in SYSTEM_FONT_FILES.get(font_name, []):
+        if Path(path).exists():
+            return True
+
+    fc_match = shutil.which("fc-match")
+    if fc_match:
+        try:
+            result = subprocess.run(
+                [fc_match, font_name],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            output = (result.stdout or "").lower()
+            return result.returncode == 0 and font_name.lower().split()[0] in output
+        except Exception:
+            return False
+    return False
+
+
+def ensure_language_font(language: str) -> dict:
+    result = check_required_fonts([language])[language]
+    if not result["ok"]:
+        required = ", ".join(result["required_any_of"])
+        raise RuntimeError(
+            f"Missing thumbnail font for {language}. Install one of: {required}. "
+            "On Ubuntu, install fonts-noto-core and fonts-noto-extra."
+        )
+    logger.info(
+        f"Thumbnail font check passed for {language}: {', '.join(result['installed'])}"
+    )
+    return result
+
+
+def _fit_font_size(text: str, base_size: int, min_size: int, soft_limit: int) -> int:
+    if len(text) <= soft_limit:
+        return base_size
+    overflow = len(text) - soft_limit
+    return max(min_size, base_size - overflow * 2)
+
+
+def _css_font_stack(font_stack: str) -> str:
+    return ", ".join(f"'{font.strip()}'" for font in font_stack.split(",") if font.strip())
+
+
 def _build_html(language, state_key, price_data, width, height):
     s = LANG_STRINGS.get(language, LANG_STRINGS["hindi"])
     sc = width / 1280   # scale factor
@@ -73,7 +162,10 @@ def _build_html(language, state_key, price_data, width, height):
 
     subtitle = "Today's Gold Rate — " + STATE_DISPLAY.get(state_key, state_key.replace("_", " ").title())
 
-    regional_font = s["font"]
+    regional_font = _css_font_stack(s["font"])
+    title_font_size = _fit_font_size(s["title"], 70, 48, 18)
+    subtitle_font_size = _fit_font_size(subtitle, 19, 15, 38)
+    cities_font_size = _fit_font_size(cities_text, 22, 15, 36)
 
     def px(n): return f"{int(n * sc)}px"
 
@@ -156,7 +248,7 @@ def _build_html(language, state_key, price_data, width, height):
     text-align: center;
   }}
   .lang-native {{
-    font-family: '{regional_font}', sans-serif;
+    font-family: {regional_font}, sans-serif;
     font-size: {px(17)};
     color: #A07808;
     text-align: center;
@@ -200,19 +292,30 @@ def _build_html(language, state_key, price_data, width, height):
   .title-block {{
     text-align: center;
     margin-bottom: {px(10)};
+    min-height: {px(96)};
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }}
   .main-title {{
-    font-family: '{regional_font}', sans-serif;
-    font-size: {px(70)};
+    font-family: {regional_font}, sans-serif;
+    font-size: {px(title_font_size)};
     font-weight: 700;
     color: #1A0C00;
     line-height: 1.1;
     margin-bottom: {px(4)};
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
   }}
   .sub-title {{
-    font-size: {px(19)};
+    font-size: {px(subtitle_font_size)};
     font-weight: 600;
     color: #3A1E00;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }}
 
   .divider {{
@@ -226,10 +329,12 @@ def _build_html(language, state_key, price_data, width, height):
     display: flex;
     gap: {px(18)};
     flex: 1;
+    min-height: 0;
   }}
 
   .card {{
     flex: 1;
+    min-width: 0;
     border-radius: {px(14)};
     display: flex;
     flex-direction: column;
@@ -258,12 +363,15 @@ def _build_html(language, state_key, price_data, width, height):
   .card-24 .carat-lbl {{ color: #FF8888; }}
 
   .price-num {{
-    font-size: {px(96)};
+    font-size: clamp({px(72)}, {px(96)}, {px(96)});
     font-weight: 900;
     color: #FFFFFF;
-    letter-spacing: -{px(2)};
+    letter-spacing: 0;
     line-height: 1;
     margin-bottom: {px(4)};
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }}
 
   .per-gram {{
@@ -286,13 +394,20 @@ def _build_html(language, state_key, price_data, width, height):
     font-size: {px(22)};
     font-weight: 600;
     margin-bottom: {px(6)};
+    text-align: center;
+    max-width: calc(100% - {px(24)});
+    overflow: hidden;
+    text-overflow: ellipsis;
   }}
   .card-22 .price-10g {{ color: #907040; }}
   .card-24 .price-10g {{ color: #906060; }}
 
   .grade-lbl {{
-    font-family: '{regional_font}', sans-serif;
+    font-family: {regional_font}, sans-serif;
     font-size: {px(17)};
+    max-width: calc(100% - {px(24)});
+    text-align: center;
+    overflow-wrap: anywhere;
   }}
   .card-22 .grade-lbl {{ color: #6A5030; }}
   .card-24 .grade-lbl {{ color: #6A3030; }}
@@ -309,11 +424,15 @@ def _build_html(language, state_key, price_data, width, height):
     gap: {px(12)};
   }}
   .cities {{
-    font-family: '{regional_font}', sans-serif;
-    font-size: {px(22)};
+    font-family: {regional_font}, sans-serif;
+    font-size: {px(cities_font_size)};
     color: #DAA520;
     flex: 1;
+    min-width: 0;
     text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }}
   .sub-btn {{
     background: #C01010;
@@ -419,6 +538,7 @@ def generate_thumbnail(
     Falls back to PIL if Playwright is not installed.
     """
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    ensure_language_font(language)
     html = _build_html(language, state_key, price_data, width, height)
 
     try:

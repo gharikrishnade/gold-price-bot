@@ -47,7 +47,7 @@ logger = logging.getLogger("main")
 from config import CHANNEL_CONFIG, DEFAULT_UPLOAD_PRIVACY
 from scraper import get_state_prices
 from script_generator import generate_script
-from thumbnail_generator import generate_thumbnail
+from thumbnail_generator import check_required_fonts, generate_thumbnail
 from tts_generator import generate_voiceover
 from video_creator import create_video
 from youtube_uploader import upload_video
@@ -362,6 +362,30 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _validate_thumbnail_fonts(enabled: dict) -> bool:
+    languages = [config["language"] for config in enabled.values()]
+    font_results = check_required_fonts(languages)
+    missing = {
+        language: result
+        for language, result in font_results.items()
+        if not result["ok"]
+    }
+    if not missing:
+        for language, result in font_results.items():
+            logger.info(
+                f"Thumbnail font preflight OK for {language}: "
+                f"{', '.join(result['installed'])}"
+            )
+        return True
+
+    for language, result in missing.items():
+        logger.error(
+            f"Missing thumbnail font for {language}. Install one of: "
+            f"{', '.join(result['required_any_of'])}"
+        )
+    return False
+
+
 def main(argv: list[str] | None = None):
     args = _parse_args(argv)
     logger.info(f"🚀 Gold Price Bot starting — {today_str}")
@@ -380,6 +404,8 @@ def main(argv: list[str] | None = None):
         enabled = {k: v for k, v in CHANNEL_CONFIG.items() if v.get("enabled", True)}
 
     logger.info(f"Channels to process: {list(enabled.keys())}")
+    if not _validate_thumbnail_fonts(enabled):
+        return 1
 
     all_results = {}
     for state_key, config in enabled.items():
