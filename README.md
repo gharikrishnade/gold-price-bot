@@ -101,8 +101,8 @@ logs/run_YYYY-MM-DD.log
 logs/scraper_debug/YYYY-MM-DD/
 ```
 
-The summary JSON includes artifact paths, validation status, upload status, video size, audio duration, and errors when present.
-Open `output/runs/YYYY-MM-DD/review.html` in a browser for a compact review page with artifact links and thumbnails.
+The summary JSON includes artifact paths, validation status, upload status, video size, audio duration, YouTube metadata preview, and errors when present.
+Open `output/runs/YYYY-MM-DD/review.html` in a browser for a compact review page with artifact links, thumbnails, and YouTube title/description/tags.
 If GoodReturns changes its page structure, the scraper saves failed city HTML and table summaries in `logs/scraper_debug/YYYY-MM-DD/` for diagnosis.
 
 ## Uploading
