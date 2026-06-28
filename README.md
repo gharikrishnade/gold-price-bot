@@ -120,6 +120,27 @@ python main.py --state telangana --privacy unlisted
 python main.py --state telangana --privacy public
 ```
 
+Require a manual approval marker before upload:
+
+```bash
+python main.py --state telangana --require-approval
+```
+
+When approval is required, the bot generates all local artifacts, writes `UPLOAD_APPROVAL_REQUIRED.txt` in the state run folder, and skips upload until the marker file exists:
+
+```text
+output/runs/YYYY-MM-DD/telangana/APPROVED_FOR_UPLOAD
+```
+
+You can also make this the default in `.env`:
+
+```bash
+REQUIRE_UPLOAD_APPROVAL=true
+UPLOAD_APPROVAL_MARKER=APPROVED_FOR_UPLOAD
+```
+
+Use `--no-require-approval` to override that default for a run.
+
 Skip upload even outside dry-run mode:
 
 ```bash
