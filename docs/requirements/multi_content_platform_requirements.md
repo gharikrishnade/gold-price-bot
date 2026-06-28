@@ -53,7 +53,7 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 | PLAT-008 | Generalized dedupe & run keys | 3 | P1 | TODO | |
 | TMPL-001 | Template component library | 4 | P1 | TODO | |
 | TMPL-002 | Per-show branding system | 4 | P1 | TODO | |
-| MOD-GOLD-001 | Gold module parity after refactor | 1 | P0 | WIP | |
+| MOD-GOLD-001 | Gold module parity after refactor | 1 | P0 | DONE | |
 | MOD-STOCK-001 | Stocks module (API data, market calendar) | 5 | P1 | TODO | |
 | MOD-STOCK-002 | Stocks charts & stat cards | 5 | P1 | TODO | |
 | MOD-STOCK-003 | Financial-advice disclaimer | 5 | P0 | TODO | |
@@ -225,7 +225,7 @@ Acceptance criteria:
 
 ### MOD-GOLD-001: Gold Module Parity
 
-**Phase:** 1 · **Priority:** P0 · **Status:** WIP — delegation verified through script+thumbnail; full audio/video re-verify pending TTS credits
+**Phase:** 1 · **Priority:** P0 · **Status:** DONE — verified via andhra_pradesh dry run end-to-end
 
 After PLAT-002/003, the gold show must retain all current behavior.
 
