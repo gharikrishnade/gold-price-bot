@@ -515,6 +515,171 @@ def _build_html(language, state_key, price_data, width, height):
     return html
 
 
+def _build_vertical_html(language, state_key, price_data, width, height):
+    """Portrait 9:16 template for Shorts/Reels — header + two stacked carat cards + footer."""
+    s = LANG_STRINGS.get(language, LANG_STRINGS["hindi"])
+    sc = width / 1080   # scale factor (portrait reference width)
+
+    cities_data = price_data.get("cities", {})
+    primary     = next(iter(cities_data), "")
+    prices      = cities_data.get(primary, {})
+    p22g   = prices.get("22k_per_gram", 0)
+    p24g   = prices.get("24k_per_gram", 0)
+    p22_10 = prices.get("22k_per_10g",  0)
+    p24_10 = prices.get("24k_per_10g",  0)
+    date_str   = price_data.get("date", date.today().strftime("%d %b %Y"))
+    city_keys  = list(cities_data.keys())[:3]
+
+    city_trans = CITY_NAMES.get(language, {})
+    city_names = [city_trans.get(c, c) for c in city_keys]
+    cities_text = "  ·  ".join(city_names)
+
+    subtitle = "Today's Gold Rate — " + STATE_DISPLAY.get(state_key, state_key.replace("_", " ").title())
+
+    regional_font = _css_font_stack(s["font"])
+    title_font_size = _fit_font_size(s["title"], 92, 58, 15)
+    cities_font_size = _fit_font_size(cities_text, 30, 20, 34)
+
+    def px(n): return f"{int(n * sc)}px"
+
+    def card(kind, carat_native, carat_en, pg, p10, grade):
+        return f"""
+        <div class="vcard vcard-{kind}">
+          <div class="vcard-bar"></div>
+          <div class="vcard-body">
+            <div class="vcarat">{carat_en}</div>
+            <div class="vprice">{pg:,}</div>
+            <div class="vpergram">₹&nbsp; per gram</div>
+            <div class="vsep"></div>
+            <div class="v10g">₹{p10:,} &nbsp;/&nbsp; 10 grams</div>
+            <div class="vgrade">{carat_native}</div>
+          </div>
+        </div>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="{language}">
+<head>
+<meta charset="UTF-8">
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    width: {width}px; height: {height}px; overflow: hidden;
+    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    background:
+      linear-gradient(160deg, #111827 0%, #0b1020 100%),
+      repeating-linear-gradient(74deg, rgba(59,130,246,.10) 0 1px, transparent 1px {px(120)});
+  }}
+  .vwrap {{
+    width: {width}px; height: {height}px;
+    display: flex; flex-direction: column;
+    padding: {px(70)} {px(54)} {px(54)};
+    gap: {px(34)};
+  }}
+
+  /* ── HEADER ── */
+  .vhead {{ text-align: center; display: flex; flex-direction: column; align-items: center; gap: {px(16)}; }}
+  .vcoin {{
+    width: {px(150)}; height: {px(150)}; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #FFE070 0%, #DAA520 45%, #8B6400 100%);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 {px(6)} {px(22)} rgba(0,0,0,0.7), inset 0 -{px(3)} {px(8)} rgba(0,0,0,0.4);
+  }}
+  .vcoin span {{ font-size: {px(74)}; font-weight: 900; color: #FFE878; text-shadow: {px(2)} {px(2)} {px(4)} rgba(0,0,0,0.5); }}
+  .vgold-label {{ font-size: {px(22)}; font-weight: 900; color: #f6c453; letter-spacing: {px(3)}; }}
+  .vtitle {{
+    font-family: {regional_font}, sans-serif;
+    font-size: {px(title_font_size)}; font-weight: 700; color: #fff7db;
+    line-height: 1.12; overflow-wrap: anywhere; text-wrap: balance;
+  }}
+  .vsub {{ font-size: {px(30)}; font-weight: 600; color: #cbd5e1; }}
+
+  /* ── CARDS (stacked) ── */
+  .vcards {{ flex: 1; display: flex; flex-direction: column; gap: {px(34)}; min-height: 0; }}
+  .vcard {{
+    flex: 1; border-radius: {px(30)}; overflow: hidden;
+    background: rgba(31,41,55,.96);
+    border: {px(3)} solid #475569;
+    box-shadow: 0 {px(20)} {px(40)} rgba(0,0,0,.4);
+    display: flex; flex-direction: column;
+  }}
+  .vcard-bar {{ width: 100%; height: {px(14)}; flex-shrink: 0; }}
+  .vcard-22 .vcard-bar {{ background: #22c55e; }}
+  .vcard-24 .vcard-bar {{ background: #f59e0b; }}
+  .vcard-body {{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: {px(20)}; }}
+  .vcarat {{ font-size: {px(40)}; font-weight: 900; letter-spacing: {px(3)}; margin-bottom: {px(10)}; }}
+  .vcard-22 .vcarat {{ color: #22c55e; }}
+  .vcard-24 .vcarat {{ color: #f59e0b; }}
+  .vprice {{ font-size: {px(150)}; font-weight: 900; color: #FFFFFF; line-height: 1; margin-bottom: {px(8)}; }}
+  .vpergram {{ font-size: {px(34)}; font-weight: 700; margin-bottom: {px(18)}; }}
+  .vcard-22 .vpergram {{ color: #22c55e; }}
+  .vcard-24 .vpergram {{ color: #f59e0b; }}
+  .vsep {{ width: 60%; height: 1px; background: rgba(148,163,184,0.28); margin-bottom: {px(18)}; }}
+  .v10g {{ font-size: {px(34)}; font-weight: 600; color: #cbd5e1; margin-bottom: {px(8)}; }}
+  .vgrade {{ font-family: {regional_font}, sans-serif; font-size: {px(28)}; color: #94a3b8; }}
+
+  /* ── FOOTER ── */
+  .vfoot {{
+    flex-shrink: 0; background: #0f172a; border-radius: {px(20)};
+    border: {px(2)} solid #334155;
+    padding: {px(22)} {px(28)};
+    display: flex; flex-direction: column; align-items: center; gap: {px(14)};
+  }}
+  .vcities {{
+    font-family: {regional_font}, sans-serif; font-size: {px(cities_font_size)};
+    color: #f6c453; font-weight: 700; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }}
+  .vfoot-row {{ display: flex; align-items: center; justify-content: center; gap: {px(20)}; }}
+  .vdate {{ font-size: {px(26)}; font-weight: 800; color: #94a3b8; }}
+  .vsub-btn {{
+    background: #f6c453; color: #111827; border-radius: {px(10)};
+    padding: {px(14)} {px(26)}; font-size: {px(26)}; font-weight: 900; white-space: nowrap;
+  }}
+</style>
+</head>
+<body>
+<div class="vwrap">
+
+  <div class="vhead">
+    <div class="vcoin"><span>₹</span></div>
+    <div class="vgold-label">GOLD UPDATES &nbsp;·&nbsp; {s['native']}</div>
+    <div class="vtitle">{s['title']}</div>
+    <div class="vsub">{subtitle}</div>
+  </div>
+
+  <div class="vcards">
+    {card("22", s['c22'] + " · Jewellery", "22 CARAT", p22g, p22_10, "")}
+    {card("24", s['c24'] + " · Investment", "24 CARAT", p24g, p24_10, "")}
+  </div>
+
+  <div class="vfoot">
+    <div class="vcities">{cities_text}</div>
+    <div class="vfoot-row">
+      <div class="vdate">{date_str}</div>
+      <div class="vsub-btn">▶&nbsp; SUBSCRIBE</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>"""
+    return html
+
+
+def generate_vertical_thumbnail(
+    language: str,
+    state_key: str,
+    price_data: dict,
+    output_path: str,
+    width: int = 1080,
+    height: int = 1920,
+) -> str:
+    """Render the portrait 9:16 Shorts/Reels frame via Playwright (Chromium)."""
+    html = _build_vertical_html(language, state_key, price_data, width, height)
+    _render_playwright(html, output_path, width, height)
+    return output_path
+
+
 def _render_playwright(html, output_path, width, height):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:

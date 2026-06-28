@@ -249,13 +249,15 @@ def create_vertical_video(
     thumbnail_path: str,
     audio_path: str,
     output_path: str,
+    vertical_frame_path: str | None = None,
 ) -> str:
     """
-    Create a vertical 9:16 video suitable for Shorts/Reels from the thumbnail + audio.
+    Create a vertical 9:16 video suitable for Shorts/Reels from a frame + audio.
 
-    The horizontal thumbnail is used as a blurred full-frame background and a sharp
-    foreground card, preserving readability without requiring a separate vertical
-    thumbnail renderer.
+    Preferred: pass ``vertical_frame_path`` — a purpose-built portrait (1080×1920)
+    template that fills the whole screen. If it is not provided, fall back to the
+    legacy behaviour of blur-padding the horizontal ``thumbnail_path`` into a 9:16
+    frame (which leaves the landscape card floating in the middle).
     """
     VideoClip, AudioFileClip, CompositeVideoClip, apply_fades, set_audio, set_fps, ver = _import_moviepy()
 
@@ -265,7 +267,11 @@ def create_vertical_video(
     duration = audio.duration
     logger.info(f"  Duration: {duration:.1f}s")
 
-    img_array = _build_vertical_frame(thumbnail_path)
+    if vertical_frame_path:
+        logger.info(f"Using portrait template frame: {vertical_frame_path}")
+        img_array = _load_vertical_template(vertical_frame_path)
+    else:
+        img_array = _build_vertical_frame(thumbnail_path)
 
     def make_frame(t):
         return img_array
@@ -294,6 +300,18 @@ def create_vertical_video(
     logger.info(f"  ✅ Done: {output_path} ({size_mb:.1f} MB, {duration:.1f}s)")
     audio.close()
     return output_path
+
+
+def _load_vertical_template(frame_path: str) -> np.ndarray:
+    """Load the portrait template and cover-fit it exactly to SHORT_W × SHORT_H."""
+    img = Image.open(frame_path).convert("RGB")
+    if img.size != (SHORT_W, SHORT_H):
+        scale = max(SHORT_W / img.width, SHORT_H / img.height)
+        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
+        left = (img.width - SHORT_W) // 2
+        top = (img.height - SHORT_H) // 2
+        img = img.crop((left, top, left + SHORT_W, top + SHORT_H))
+    return np.array(img)
 
 
 def _build_vertical_frame(thumbnail_path: str) -> np.ndarray:

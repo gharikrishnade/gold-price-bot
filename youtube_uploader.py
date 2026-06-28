@@ -186,8 +186,13 @@ def build_video_metadata(
     state_key: str,
     privacy_status: str = "private",
     upload_date: str = None,
+    shorts: bool = False,
 ) -> dict:
-    """Build the exact YouTube metadata payload used for upload/review."""
+    """Build the exact YouTube metadata payload used for upload/review.
+
+    When ``shorts`` is True, the title/description/tags are tuned for YouTube Shorts
+    (the ``#Shorts`` hashtag helps YouTube classify the vertical <60s video as a Short).
+    """
     if privacy_status not in {"private", "unlisted", "public"}:
         raise ValueError(f"Invalid YouTube privacy status: {privacy_status}")
 
@@ -195,7 +200,14 @@ def build_video_metadata(
     meta = STATE_VIDEO_METADATA.get(state_key, VIDEO_METADATA.get(language, {}))
     title = meta.get("title_template", "Gold Rate Today {date}").format(date=date_label)
     description = meta.get("description_template", "Gold rate update {date}").format(date=date_label)
-    tags = meta.get("tags", ["gold rate", "gold price today"])
+    tags = list(meta.get("tags", ["gold rate", "gold price today"]))
+
+    if shorts:
+        # Keep the #Shorts tag within YouTube's 100-char title limit.
+        suffix = " #Shorts"
+        title = (title[: 100 - len(suffix)] + suffix) if len(title) + len(suffix) > 100 else title + suffix
+        description = "#Shorts\n\n" + description
+        tags = (["shorts", "gold rate shorts"] + tags)[:30]
 
     return {
         "title": title[:100],
@@ -215,6 +227,7 @@ def upload_video(
     channel_token_file: str,
     thumbnail_path: str = None,
     privacy_status: str = "private",
+    shorts: bool = False,
 ) -> str:
     """
     Upload video to YouTube channel. Returns video ID.
@@ -223,6 +236,7 @@ def upload_video(
         language=language,
         state_key=state_key,
         privacy_status=privacy_status,
+        shorts=shorts,
     )
 
     youtube = _get_youtube_service(channel_token_file)
@@ -260,13 +274,17 @@ def upload_video(
     video_id = response["id"]
     logger.info(f"Upload complete! Video ID: {video_id}")
 
-    # Set thumbnail if provided
+    # Set thumbnail if provided. Custom thumbnails are often rejected for Shorts and
+    # may require channel verification, so a failure here must not fail the upload.
     if thumbnail_path and Path(thumbnail_path).exists():
-        youtube.thumbnails().set(
-            videoId=video_id,
-            media_body=MediaFileUpload(thumbnail_path),
-        ).execute()
-        logger.info("Thumbnail set.")
+        try:
+            youtube.thumbnails().set(
+                videoId=video_id,
+                media_body=MediaFileUpload(thumbnail_path),
+            ).execute()
+            logger.info("Thumbnail set.")
+        except Exception as e:
+            logger.warning(f"Could not set custom thumbnail (continuing): {e}")
 
     return video_id
 
