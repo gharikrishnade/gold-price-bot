@@ -49,6 +49,7 @@ Paths:
 ```bash
 RUN_OUTPUT_DIR=output/runs
 HISTORY_DB_PATH=data/gold_prices.sqlite
+SCRAPER_DEBUG_DIR=logs/scraper_debug
 LOG_DIR=logs
 YOUTUBE_CREDS_DIR=credentials/youtube
 ```
@@ -96,9 +97,11 @@ output/runs/YYYY-MM-DD/<state>/
 output/runs/YYYY-MM-DD/summary.json
 logs/summary_YYYY-MM-DD.json
 logs/run_YYYY-MM-DD.log
+logs/scraper_debug/YYYY-MM-DD/
 ```
 
 The summary JSON includes artifact paths, validation status, upload status, video size, audio duration, and errors when present.
+If GoodReturns changes its page structure, the scraper saves failed city HTML and table summaries in `logs/scraper_debug/YYYY-MM-DD/` for diagnosis.
 
 ## Uploading
 

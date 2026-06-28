@@ -13,6 +13,7 @@ so strategies 2 and 3 ensure we always return the last closing price.
 
 import json
 import time
+import os
 import requests
 from bs4 import BeautifulSoup
 from datetime import date
@@ -22,6 +23,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 CACHE_FILE = Path(__file__).parent / "output" / "price_cache.json"
+SCRAPER_DEBUG_DIR = Path(os.environ.get("SCRAPER_DEBUG_DIR", "logs/scraper_debug"))
 
 STATE_CITIES = {
     "tamil_nadu": [
@@ -286,6 +288,48 @@ def _prices_are_valid(result: dict) -> bool:
 
 # ── Core city scraper ─────────────────────────────────────────────────────────
 
+def _save_parse_debug(city_slug: str, url: str, html: str, soup: BeautifulSoup) -> dict:
+    """Save source HTML and a compact table summary for parser failures."""
+    today_str = date.today().isoformat()
+    debug_dir = SCRAPER_DEBUG_DIR / today_str
+    debug_dir.mkdir(parents=True, exist_ok=True)
+
+    html_path = debug_dir / f"{city_slug}.html"
+    summary_path = debug_dir / f"{city_slug}_tables.json"
+    html_path.write_text(html, encoding="utf-8", errors="replace")
+
+    table_summaries = []
+    for table_index, table in enumerate(soup.find_all("table")):
+        rows = table.find_all("tr")
+        first_rows = []
+        for row in rows[:5]:
+            cells = row.find_all(["th", "td"])
+            first_rows.append([cell.get_text(" ", strip=True) for cell in cells[:8]])
+        table_summaries.append(
+            {
+                "table_index": table_index,
+                "row_count": len(rows),
+                "first_rows": first_rows,
+            }
+        )
+
+    summary_path.write_text(
+        json.dumps(
+            {
+                "city_slug": city_slug,
+                "source_url": url,
+                "table_count": len(table_summaries),
+                "tables": table_summaries,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    logger.warning(f"  Saved scrape debug files for {city_slug}: {html_path}, {summary_path}")
+    return {"html_path": str(html_path), "tables_path": str(summary_path)}
+
+
 def fetch_city_gold_price(city_slug: str) -> dict:
     """
     Fetch 22K / 24K gold price for a city from GoodReturns.
@@ -312,12 +356,13 @@ def fetch_city_gold_price(city_slug: str) -> dict:
             logger.info(f"  ℹ️  {city_slug}: using last closing price from {src}")
             return prices
 
+        debug_paths = _save_parse_debug(city_slug, url, resp.text, soup)
         logger.warning(f"  ⚠️  {city_slug}: no prices found on page ({url})")
-        return {}
+        return {"_error": "parse_failed", "_source_url": url, "_debug": debug_paths}
 
     except Exception as e:
         logger.exception(f"Failed to fetch {city_slug} from {url}: {e}")
-        return {}
+        return {"_error": "fetch_failed", "_source_url": url, "_message": str(e)}
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -348,6 +393,15 @@ def get_state_prices(state_key: str) -> dict:
         logger.info(f"  Fetching {city_name}...")
         result["source_urls"][city_name] = _city_url(city_slug)
         result["cities"][city_name] = fetch_city_gold_price(city_slug)
+        city_result = result["cities"][city_name]
+        if city_result.get("_debug"):
+            result.setdefault("scrape_debug", {})[city_name] = city_result["_debug"]
+        if city_result.get("_error"):
+            result.setdefault("scrape_errors", {})[city_name] = {
+                "error": city_result.get("_error"),
+                "message": city_result.get("_message"),
+                "source_url": city_result.get("_source_url"),
+            }
 
     if _prices_are_valid(result):
         _save_cache(state_key, result)
