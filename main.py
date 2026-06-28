@@ -58,6 +58,14 @@ from review_page import write_review_page
 
 RUN_OUTPUT_DIR = os.environ.get("RUN_OUTPUT_DIR", "output/runs")
 UPLOAD_HISTORY_FILE = Path(LOG_DIR) / "upload_history.json"
+APPROVAL_MARKER_FILE = os.environ.get("UPLOAD_APPROVAL_MARKER", "APPROVED_FOR_UPLOAD")
+APPROVAL_INSTRUCTIONS_FILE = "UPLOAD_APPROVAL_REQUIRED.txt"
+DEFAULT_REQUIRE_UPLOAD_APPROVAL = os.environ.get("REQUIRE_UPLOAD_APPROVAL", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 def run_pipeline_for_state(
@@ -69,6 +77,7 @@ def run_pipeline_for_state(
     privacy_status: str = DEFAULT_UPLOAD_PRIVACY,
     force_upload: bool = False,
     create_shorts: bool = False,
+    require_approval: bool = DEFAULT_REQUIRE_UPLOAD_APPROVAL,
 ) -> dict:
     """Run the full pipeline for one state/channel."""
     started_at = datetime.now().isoformat(timespec="seconds")
@@ -81,6 +90,7 @@ def run_pipeline_for_state(
         "dry_run": dry_run,
         "privacy_status": privacy_status,
         "create_shorts": create_shorts,
+        "require_upload_approval": require_approval,
         "scrape_status": "pending",
         "price_validation_status": "pending",
         "script_generation_status": "pending",
@@ -94,11 +104,15 @@ def run_pipeline_for_state(
     language = config["language"]
     artifact_dir = _state_artifact_dir(state_key)
     result["artifact_dir"] = str(artifact_dir)
+    result["approval_marker_path"] = str(_approval_marker_path(artifact_dir))
 
     logger.info(f"\n{'='*60}")
     logger.info(f"Processing: {state_key} ({language})")
     logger.info(f"{'='*60}")
-    logger.info(f"Run options for {state_key}: dry_run={dry_run}, skip_upload={skip_upload}, privacy={privacy_status}")
+    logger.info(
+        f"Run options for {state_key}: dry_run={dry_run}, skip_upload={skip_upload}, "
+        f"privacy={privacy_status}, shorts={create_shorts}, require_approval={require_approval}"
+    )
 
     # ── Step 1: Scrape gold prices ────────────────────────────────────────────
     logger.info("[1/6] Scraping gold prices...")
@@ -249,6 +263,18 @@ def run_pipeline_for_state(
         logger.info(f"[6/6] Upload skipped intentionally ({reason})")
         return result
 
+    if require_approval and not _upload_approved(artifact_dir):
+        marker_path = _approval_marker_path(artifact_dir)
+        instructions_path = _write_approval_instructions(artifact_dir, marker_path, state_key)
+        result["upload_status"] = "skipped"
+        result["upload_skip_reason"] = "manual_approval_required"
+        result["approval_instructions_path"] = str(instructions_path)
+        logger.warning(
+            f"[6/6] Upload skipped for {state_key}: manual approval required. "
+            f"Review artifacts and create {marker_path} to approve upload."
+        )
+        return result
+
     existing_upload = _find_existing_upload(state_key, today_str)
     if existing_upload and not force_upload:
         result["upload_status"] = "skipped"
@@ -313,6 +339,30 @@ def _write_script_artifact(artifact_dir: Path, script: str) -> str:
     script_path = artifact_dir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
     return str(script_path)
+
+
+def _approval_marker_path(artifact_dir: Path) -> Path:
+    return artifact_dir / APPROVAL_MARKER_FILE
+
+
+def _upload_approved(artifact_dir: Path) -> bool:
+    return _approval_marker_path(artifact_dir).exists()
+
+
+def _write_approval_instructions(artifact_dir: Path, marker_path: Path, state_key: str) -> Path:
+    instructions_path = artifact_dir / APPROVAL_INSTRUCTIONS_FILE
+    instructions_path.write_text(
+        "\n".join(
+            [
+                f"Manual upload approval is required for {state_key} on {today_str}.",
+                f"Review the artifacts in this folder, then create {marker_path.name} in this folder to approve upload.",
+                "The bot checks for the marker file path, not the marker file's contents.",
+                "Delete the marker file to require approval again on a rerun.",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return instructions_path
 
 
 def _audio_duration_seconds(audio_path: str) -> float | None:
@@ -382,6 +432,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--skip-upload", action="store_true", help="Skip YouTube upload after local video generation.")
     parser.add_argument("--force-upload", action="store_true", help="Allow uploading even if this state/date was already uploaded.")
     parser.add_argument("--shorts", action="store_true", help="Also create a vertical 9:16 Shorts/Reels MP4.")
+    parser.add_argument(
+        "--require-approval",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_REQUIRE_UPLOAD_APPROVAL,
+        help="Skip upload unless the state artifact folder contains the upload approval marker.",
+    )
     parser.add_argument("--no-notify", action="store_true", help="Do not send configured run notifications.")
     parser.add_argument("--state", help="Process only one state key from CHANNEL_CONFIG.")
     parser.add_argument(
@@ -423,7 +479,8 @@ def main(argv: list[str] | None = None):
     logger.info(
         f"Options: dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
         f"state={args.state or 'enabled'}, privacy={args.privacy}, "
-        f"force_upload={args.force_upload}, shorts={args.shorts}, notify={not args.no_notify}"
+        f"force_upload={args.force_upload}, require_approval={args.require_approval}, "
+        f"shorts={args.shorts}, notify={not args.no_notify}"
     )
 
     if args.state:
@@ -449,6 +506,7 @@ def main(argv: list[str] | None = None):
             privacy_status=args.privacy,
             force_upload=args.force_upload,
             create_shorts=args.shorts,
+            require_approval=args.require_approval,
         )
         all_results[state_key] = result
 

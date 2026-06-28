@@ -266,6 +266,7 @@ def _state_section(state_key: str, result: dict[str, Any], output_dir: Path) -> 
     <dt>Video</dt><dd>{escape(str(result.get("video_status", "unknown")))}{_optional_suffix(result.get("video_size_mb"), " MB")}</dd>
     <dt>Shorts</dt><dd>{escape(str(result.get("shorts_status", "not_requested")))}{_optional_suffix(result.get("shorts_video_size_mb"), " MB")}</dd>
     <dt>Upload</dt><dd>{escape(str(result.get("upload_status", "unknown")))}{_skip_reason(result)}</dd>
+    <dt>Approval</dt><dd>{_approval_status(result, output_dir)}</dd>
     <dt>Privacy</dt><dd>{escape(str(result.get("privacy_status", "")))}</dd>
   </dl>
   {metadata}
@@ -354,6 +355,25 @@ def _optional_suffix(value: Any, suffix: str) -> str:
 def _skip_reason(result: dict[str, Any]) -> str:
     reason = result.get("upload_skip_reason")
     return f" ({escape(str(reason))})" if reason else ""
+
+
+def _approval_status(result: dict[str, Any], output_dir: Path) -> str:
+    if not result.get("require_upload_approval"):
+        return "Not required"
+    marker_path = result.get("approval_marker_path")
+    instructions_path = result.get("approval_instructions_path")
+    if marker_path and Path(marker_path).exists():
+        return "Approved"
+    if instructions_path and Path(instructions_path).exists():
+        return f'Required ({_plain_path_link(instructions_path, output_dir)})'
+    if marker_path:
+        return f"Required; marker: {escape(str(marker_path))}"
+    return "Required"
+
+
+def _plain_path_link(path: str, output_dir: Path) -> str:
+    href = escape(_relative_path(path, output_dir))
+    return f'<a href="{href}">{escape(str(Path(path).name))}</a>'
 
 
 def _artifact_count(all_results: dict[str, dict[str, Any]]) -> int:
