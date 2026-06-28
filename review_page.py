@@ -171,6 +171,32 @@ def _build_review_html(
       margin-top: 10px;
       overflow-wrap: anywhere;
     }}
+    details {{
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 12px;
+      background: #fffdf9;
+    }}
+    summary {{
+      cursor: pointer;
+      font-weight: 700;
+    }}
+    .metadata {{
+      margin-top: 10px;
+      margin-bottom: 0;
+    }}
+    .description {{
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 220px;
+      overflow: auto;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
     footer {{
       margin-top: 24px;
       border-top: 1px solid var(--line);
@@ -219,6 +245,7 @@ def _state_section(state_key: str, result: dict[str, Any], output_dir: Path) -> 
     badge_class = {"completed": "ok", "skipped": "warn", "failed": "bad"}.get(status, "warn")
     thumb = _thumbnail_html(result.get("thumbnail_path"), output_dir)
     links = _artifact_links(result, output_dir)
+    metadata = _metadata_html(result.get("youtube_metadata"))
     error = result.get("error")
     error_html = f'<div class="error">{escape(str(error))}</div>' if error else ""
 
@@ -240,6 +267,7 @@ def _state_section(state_key: str, result: dict[str, Any], output_dir: Path) -> 
     <dt>Upload</dt><dd>{escape(str(result.get("upload_status", "unknown")))}{_skip_reason(result)}</dd>
     <dt>Privacy</dt><dd>{escape(str(result.get("privacy_status", "")))}</dd>
   </dl>
+  {metadata}
   {links}
   {error_html}
 </article>"""
@@ -282,6 +310,23 @@ def _artifact_links(result: dict[str, Any], output_dir: Path) -> str:
             continue
         links.append(f'<a href="{href}">{escape(label)}</a>')
     return f'<div class="links">{"".join(links)}</div>' if links else ""
+
+
+def _metadata_html(metadata: dict[str, Any] | None) -> str:
+    if not metadata:
+        return ""
+    tags = ", ".join(str(tag) for tag in metadata.get("tags", []))
+    description = metadata.get("description", "")
+    return f"""<details>
+  <summary>YouTube metadata</summary>
+  <dl class="metadata">
+    <dt>Title</dt><dd>{escape(str(metadata.get("title", "")))}</dd>
+    <dt>Privacy</dt><dd>{escape(str(metadata.get("privacy_status", "")))}</dd>
+    <dt>Language</dt><dd>{escape(str(metadata.get("default_language", "")))}</dd>
+    <dt>Tags</dt><dd>{escape(tags)}</dd>
+  </dl>
+  <div class="description">{escape(str(description))}</div>
+</details>"""
 
 
 def _path_link(path: str, output_dir: Path) -> str:

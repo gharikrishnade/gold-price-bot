@@ -50,7 +50,7 @@ from script_generator import generate_script
 from thumbnail_generator import check_required_fonts, generate_thumbnail
 from tts_generator import generate_voiceover
 from video_creator import create_video
-from youtube_uploader import upload_video
+from youtube_uploader import build_video_metadata, upload_video
 from price_validator import validate_state_price_data
 from price_history import build_history_context, store_price_data
 from notifier import notifications_enabled, send_run_notification
@@ -207,6 +207,11 @@ def run_pipeline_for_state(
         size_mb = Path(video_path).stat().st_size / (1024 * 1024)
         result["video_size_mb"] = round(size_mb, 2)
         result["video_status"] = "success"
+        result["youtube_metadata"] = build_video_metadata(
+            language=language,
+            state_key=state_key,
+            privacy_status=privacy_status,
+        )
         logger.info(f"  ✅ Video: {video_path} ({size_mb:.1f} MB)")
     except Exception as e:
         logger.exception(f"  ❌ Video creation failed for {state_key}: {e}")

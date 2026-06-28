@@ -180,6 +180,34 @@ def _get_youtube_service(channel_token_file: str):
     return build("youtube", "v3", credentials=creds)
 
 
+def build_video_metadata(
+    *,
+    language: str,
+    state_key: str,
+    privacy_status: str = "private",
+    upload_date: str = None,
+) -> dict:
+    """Build the exact YouTube metadata payload used for upload/review."""
+    if privacy_status not in {"private", "unlisted", "public"}:
+        raise ValueError(f"Invalid YouTube privacy status: {privacy_status}")
+
+    date_label = upload_date or date.today().strftime("%d %B %Y")
+    meta = STATE_VIDEO_METADATA.get(state_key, VIDEO_METADATA.get(language, {}))
+    title = meta.get("title_template", "Gold Rate Today {date}").format(date=date_label)
+    description = meta.get("description_template", "Gold rate update {date}").format(date=date_label)
+    tags = meta.get("tags", ["gold rate", "gold price today"])
+
+    return {
+        "title": title[:100],
+        "description": description[:5000],
+        "tags": tags,
+        "category_id": "25",
+        "default_language": _yt_language_code(language),
+        "privacy_status": privacy_status,
+        "self_declared_made_for_kids": False,
+    }
+
+
 def upload_video(
     video_path: str,
     language: str,
@@ -191,28 +219,25 @@ def upload_video(
     """
     Upload video to YouTube channel. Returns video ID.
     """
-    today = date.today().strftime("%d %B %Y")
-    meta = STATE_VIDEO_METADATA.get(state_key, VIDEO_METADATA.get(language, {}))
-    if privacy_status not in {"private", "unlisted", "public"}:
-        raise ValueError(f"Invalid YouTube privacy status: {privacy_status}")
-
-    title = meta.get("title_template", "Gold Rate Today {date}").format(date=today)
-    description = meta.get("description_template", "Gold rate update {date}").format(date=today)
-    tags = meta.get("tags", ["gold rate", "gold price today"])
+    metadata = build_video_metadata(
+        language=language,
+        state_key=state_key,
+        privacy_status=privacy_status,
+    )
 
     youtube = _get_youtube_service(channel_token_file)
 
     body = {
         "snippet": {
-            "title": title[:100],  # YouTube title limit
-            "description": description[:5000],
-            "tags": tags,
-            "categoryId": "25",  # News & Politics
-            "defaultLanguage": _yt_language_code(language),
+            "title": metadata["title"],
+            "description": metadata["description"],
+            "tags": metadata["tags"],
+            "categoryId": metadata["category_id"],
+            "defaultLanguage": metadata["default_language"],
         },
         "status": {
-            "privacyStatus": privacy_status,
-            "selfDeclaredMadeForKids": False,
+            "privacyStatus": metadata["privacy_status"],
+            "selfDeclaredMadeForKids": metadata["self_declared_made_for_kids"],
         },
     }
 
@@ -223,7 +248,7 @@ def upload_video(
         chunksize=4 * 1024 * 1024,  # 4MB chunks
     )
 
-    logger.info(f"Uploading '{title}' to YouTube with privacy={privacy_status}...")
+    logger.info(f"Uploading '{metadata['title']}' to YouTube with privacy={privacy_status}...")
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
 
     response = None
