@@ -44,7 +44,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
-from config import CHANNEL_CONFIG, DEFAULT_UPLOAD_PRIVACY, VIDEO_OUTPUT_DIR
+from config import CHANNEL_CONFIG, DEFAULT_UPLOAD_PRIVACY
 from scraper import get_state_prices
 from script_generator import generate_script
 from thumbnail_generator import generate_thumbnail
@@ -52,9 +52,9 @@ from tts_generator import generate_voiceover
 from video_creator import create_video
 from youtube_uploader import upload_video
 from price_validator import validate_state_price_data
+from price_history import build_history_context, store_price_data
 
-THUMBNAIL_DIR = os.environ.get("THUMBNAIL_OUTPUT_DIR", "output/thumbnails")
-AUDIO_DIR     = os.environ.get("AUDIO_OUTPUT_DIR",     "output/audio")
+RUN_OUTPUT_DIR = os.environ.get("RUN_OUTPUT_DIR", "output/runs")
 UPLOAD_HISTORY_FILE = Path(LOG_DIR) / "upload_history.json"
 
 
@@ -83,9 +83,12 @@ def run_pipeline_for_state(
         "thumbnail_status": "pending",
         "audio_status": "pending",
         "video_status": "pending",
+        "history_storage_status": "pending",
         "upload_status": "pending",
     }
     language = config["language"]
+    artifact_dir = _state_artifact_dir(state_key)
+    result["artifact_dir"] = str(artifact_dir)
 
     logger.info(f"\n{'='*60}")
     logger.info(f"Processing: {state_key} ({language})")
@@ -125,13 +128,25 @@ def run_pipeline_for_state(
         result["error"] = f"scraping: {e}"
         return result
 
+    try:
+        history_context = build_history_context(state_key, price_data, run_date=today_str)
+        price_data["history_context"] = history_context
+        result["history_context"] = history_context
+        store_price_data(state_key, price_data, run_date=today_str)
+        result["history_storage_status"] = "success"
+    except Exception as e:
+        logger.exception(f"  ❌ Historical price storage failed for {state_key}: {e}")
+        result["history_storage_status"] = "failed"
+        result["error"] = f"history_storage: {e}"
+        return result
+
     # ── Step 2: Generate script ───────────────────────────────────────────────
     logger.info("[2/6] Generating AI script...")
     try:
         script = generate_script(language, state_key, price_data)
         result["script"] = script
         result["script_generation_status"] = "success"
-        script_path = _write_script_artifact(state_key, script)
+        script_path = _write_script_artifact(artifact_dir, script)
         result["script_path"] = script_path
         logger.info(f"  ✅ Script generated ({len(script.split())} words)")
     except Exception as e:
@@ -142,8 +157,7 @@ def run_pipeline_for_state(
 
     # ── Step 3: Generate thumbnail ────────────────────────────────────────────
     logger.info("[3/6] Generating thumbnail...")
-    Path(THUMBNAIL_DIR).mkdir(parents=True, exist_ok=True)
-    thumbnail_path = f"{THUMBNAIL_DIR}/{state_key}_{today_str}.jpg"
+    thumbnail_path = str(artifact_dir / "thumbnail.jpg")
     try:
         generate_thumbnail(language, state_key, price_data, thumbnail_path)
         result["thumbnail_path"] = thumbnail_path
@@ -157,8 +171,7 @@ def run_pipeline_for_state(
 
     # ── Step 4: Generate voiceover ────────────────────────────────────────────
     logger.info("[4/6] Generating voiceover audio...")
-    Path(AUDIO_DIR).mkdir(parents=True, exist_ok=True)
-    audio_path = f"{AUDIO_DIR}/{state_key}_{today_str}.mp3"
+    audio_path = str(artifact_dir / "voiceover.mp3")
     try:
         audio_path = _generate_voiceover_with_retries(script, language, audio_path, state_key)
         result["audio_path"] = audio_path
@@ -173,12 +186,11 @@ def run_pipeline_for_state(
 
     # ── Step 5: Create video ──────────────────────────────────────────────────
     logger.info("[5/6] Creating video (thumbnail + Ken Burns + audio)...")
-    Path(VIDEO_OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
-    video_path = f"{VIDEO_OUTPUT_DIR}/{state_key}_{today_str}.mp4"
+    video_path = str(artifact_dir / "video.mp4")
 
     # If thumbnail failed, use a plain black frame fallback
     thumb_for_video = thumbnail_path if thumbnail_path else _make_fallback_thumbnail(
-        language, price_data, f"{THUMBNAIL_DIR}/{state_key}_{today_str}_fallback.jpg"
+        language, price_data, str(artifact_dir / "thumbnail_fallback.jpg")
     )
 
     try:
@@ -256,10 +268,20 @@ def _make_fallback_thumbnail(language: str, price_data: dict, path: str) -> str:
         return None
 
 
-def _write_script_artifact(state_key: str, script: str) -> str:
-    script_dir = Path(os.environ.get("SCRIPT_OUTPUT_DIR", "output/scripts"))
-    script_dir.mkdir(parents=True, exist_ok=True)
-    script_path = script_dir / f"{state_key}_{today_str}.txt"
+def _run_artifact_dir() -> Path:
+    path = Path(RUN_OUTPUT_DIR) / today_str
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _state_artifact_dir(state_key: str) -> Path:
+    path = _run_artifact_dir() / state_key
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _write_script_artifact(artifact_dir: Path, script: str) -> str:
+    script_path = artifact_dir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
     return str(script_path)
 
@@ -375,6 +397,11 @@ def main(argv: list[str] | None = None):
     summary_path = f"{LOG_DIR}/summary_{today_str}.json"
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(all_results, f, indent=2, ensure_ascii=False, default=str)
+    review_summary_path = _run_artifact_dir() / "summary.json"
+    review_summary_path.write_text(
+        json.dumps(all_results, indent=2, ensure_ascii=False, default=str),
+        encoding="utf-8",
+    )
 
     success = [
         k for k, v in all_results.items()
@@ -388,6 +415,7 @@ def main(argv: list[str] | None = None):
     logger.info(f"✅ Completed ({len(success)}): {', '.join(success) or 'none'}")
     logger.info(f"❌ Failed  ({len(failed)}):  {', '.join(failed) or 'none'}")
     logger.info(f"Summary: {summary_path}")
+    logger.info(f"Review summary: {review_summary_path}")
 
     return 0 if not failed else 1
 

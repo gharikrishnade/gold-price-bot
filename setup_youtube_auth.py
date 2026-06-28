@@ -58,7 +58,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--channel",
-        required=True,
         help=f"Channel key from config.py. Options: {list(CHANNEL_CONFIG.keys())}",
     )
     parser.add_argument(
@@ -73,5 +72,7 @@ if __name__ == "__main__":
             if cfg.get("enabled"):
                 setup_auth(key)
                 input("\nPress Enter to continue to next channel...\n")
-    else:
+    elif args.channel:
         setup_auth(args.channel)
+    else:
+        parser.error("provide --channel <state_key> or --all")
