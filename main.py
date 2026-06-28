@@ -44,15 +44,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
-from config import CHANNEL_CONFIG, DEFAULT_UPLOAD_PRIVACY
-from scraper import get_state_prices
-from script_generator import generate_script, generate_short_script
-from thumbnail_generator import check_required_fonts, generate_thumbnail, generate_vertical_thumbnail
+from config import DEFAULT_UPLOAD_PRIVACY
+from modules import get_module
 from tts_generator import generate_voiceover
 from video_creator import create_vertical_video, create_video, save_trend_preview
-from youtube_uploader import build_video_metadata, upload_video
-from price_validator import validate_state_price_data
-from price_history import build_history_context, store_price_data
+from youtube_uploader import upload_video
 from notifier import notifications_enabled, send_run_notification
 from review_page import write_review_page
 
@@ -68,9 +64,9 @@ DEFAULT_REQUIRE_UPLOAD_APPROVAL = os.environ.get("REQUIRE_UPLOAD_APPROVAL", "fal
 }
 
 
-def run_pipeline_for_state(
+def run_pipeline_for_channel(
+    module,
     state_key: str,
-    config: dict,
     *,
     dry_run: bool = False,
     skip_upload: bool = False,
@@ -81,15 +77,18 @@ def run_pipeline_for_state(
     trend_cards: bool = False,
     require_approval: bool = DEFAULT_REQUIRE_UPLOAD_APPROVAL,
 ) -> dict:
-    """Run the full pipeline for one state/channel."""
+    """Run the full pipeline for one channel of the given content module."""
     if shorts_only:
         create_shorts = True
+    config = module.channel_meta(state_key)
+    language = module.language_for(state_key)
     started_at = datetime.now().isoformat(timespec="seconds")
     result = {
         "run_date": today_str,
         "started_at": started_at,
+        "module": module.key,
         "state_key": state_key,
-        "language": config["language"],
+        "language": language,
         "region_name": config.get("region_name"),
         "dry_run": dry_run,
         "privacy_status": privacy_status,
@@ -108,13 +107,12 @@ def run_pipeline_for_state(
         "history_storage_status": "pending",
         "upload_status": "pending",
     }
-    language = config["language"]
     artifact_dir = _state_artifact_dir(state_key)
     result["artifact_dir"] = str(artifact_dir)
     result["approval_marker_path"] = str(_approval_marker_path(artifact_dir))
 
     logger.info(f"\n{'='*60}")
-    logger.info(f"Processing: {state_key} ({language})")
+    logger.info(f"Processing: {module.key}/{state_key} ({language})")
     logger.info(f"{'='*60}")
     logger.info(
         f"Run options for {state_key}: dry_run={dry_run}, skip_upload={skip_upload}, "
@@ -122,24 +120,19 @@ def run_pipeline_for_state(
         f"trend_cards={trend_cards}, require_approval={require_approval}"
     )
 
-    # ── Step 1: Scrape gold prices ────────────────────────────────────────────
-    logger.info("[1/6] Scraping gold prices...")
+    # ── Step 1: Fetch + validate data ─────────────────────────────────────────
+    logger.info(f"[1/6] Fetching data ({module.key})...")
     try:
-        price_data = get_state_prices(state_key)
+        price_data = module.fetch(state_key)
         result["price_data"] = price_data
         result["scrape_status"] = "success"
 
-        validation = validate_state_price_data(price_data)
-        result["price_validation"] = validation.to_dict()
+        validation = module.validate(price_data)
+        result["price_validation"] = validation.details
         result["price_validation_status"] = "success" if validation.valid else "failed"
         if not validation.valid:
-            for city_result in validation.city_results:
-                if city_result.valid:
-                    continue
-                logger.error(
-                    f"  Price validation failed for {state_key}/{city_result.city}: "
-                    f"{'; '.join(city_result.errors)}"
-                )
+            for err in validation.errors:
+                logger.error(f"  Data validation failed for {state_key}: {err}")
             result["error"] = "price_validation_failed"
             return result
 
@@ -148,31 +141,32 @@ def run_pipeline_for_state(
                 f"  ⚠️  Market closed today — using last closing prices "
                 f"from {price_data['cached_date']}"
             )
-        logger.info(f"  ✅ Got prices for {len(price_data['cities'])} cities")
+        logger.info(f"  ✅ Got data for {len(price_data.get('cities', {}))} cities")
     except Exception as e:
-        logger.exception(f"  ❌ Scraping failed for {state_key}: {e}")
+        logger.exception(f"  ❌ Fetch failed for {state_key}: {e}")
         result["scrape_status"] = "failed"
-        result["error"] = f"scraping: {e}"
+        result["error"] = f"fetch: {e}"
         return result
 
-    try:
-        history_context = build_history_context(state_key, price_data, run_date=today_str)
-        price_data["history_context"] = history_context
-        result["history_context"] = history_context
-        store_price_data(state_key, price_data, run_date=today_str)
-        result["history_storage_status"] = "success"
-    except Exception as e:
-        logger.exception(f"  ❌ Historical price storage failed for {state_key}: {e}")
-        result["history_storage_status"] = "failed"
-        result["error"] = f"history_storage: {e}"
-        return result
+    if module.needs_history:
+        try:
+            history_context = module.build_history(state_key, price_data, run_date=today_str)
+            result["history_context"] = history_context
+            result["history_storage_status"] = "success"
+        except Exception as e:
+            logger.exception(f"  ❌ History storage failed for {state_key}: {e}")
+            result["history_storage_status"] = "failed"
+            result["error"] = f"history_storage: {e}"
+            return result
+    else:
+        result["history_storage_status"] = "not_applicable"
 
     # ── Shorts-only mode: skip the long landscape video pipeline entirely ──────
     if shorts_only:
         logger.info("Shorts-only mode: skipping long landscape script/thumbnail/voiceover/video.")
         for skipped in ("script_generation_status", "thumbnail_status", "audio_status", "video_status"):
             result[skipped] = "skipped_shorts_only"
-        _create_shorts_video(result, artifact_dir, language, state_key, price_data)
+        _create_shorts_video(result, artifact_dir, module, state_key, price_data)
 
         # ── Step 6: Upload the Short ───────────────────────────────────────────
         if dry_run or skip_upload:
@@ -186,7 +180,7 @@ def run_pipeline_for_state(
             logger.warning("[6/6] Upload skipped: Short was not created successfully.")
         else:
             _upload_short_video(
-                result, artifact_dir, state_key, config, language, privacy_status,
+                result, artifact_dir, module, state_key, language, privacy_status,
                 require_approval=require_approval, force_upload=force_upload,
             )
         return result
@@ -194,7 +188,7 @@ def run_pipeline_for_state(
     # ── Step 2: Generate script ───────────────────────────────────────────────
     logger.info("[2/6] Generating AI script...")
     try:
-        script = generate_script(language, state_key, price_data)
+        script = module.generate_script(state_key, price_data)
         result["script"] = script
         result["script_generation_status"] = "success"
         script_path = _write_script_artifact(artifact_dir, script)
@@ -210,7 +204,7 @@ def run_pipeline_for_state(
     logger.info("[3/6] Generating thumbnail...")
     thumbnail_path = str(artifact_dir / "thumbnail.jpg")
     try:
-        generate_thumbnail(language, state_key, price_data, thumbnail_path)
+        module.render_thumbnail(state_key, price_data, thumbnail_path)
         result["thumbnail_path"] = thumbnail_path
         result["thumbnail_status"] = "success"
         logger.info(f"  ✅ Thumbnail: {thumbnail_path}")
@@ -273,11 +267,7 @@ def run_pipeline_for_state(
         size_mb = Path(video_path).stat().st_size / (1024 * 1024)
         result["video_size_mb"] = round(size_mb, 2)
         result["video_status"] = "success"
-        result["youtube_metadata"] = build_video_metadata(
-            language=language,
-            state_key=state_key,
-            privacy_status=privacy_status,
-        )
+        result["youtube_metadata"] = module.youtube_metadata(state_key, privacy_status)
         logger.info(f"  ✅ Video: {video_path} ({size_mb:.1f} MB)")
     except Exception as e:
         logger.exception(f"  ❌ Video creation failed for {state_key}: {e}")
@@ -287,7 +277,7 @@ def run_pipeline_for_state(
 
     if create_shorts:
         logger.info("[5b/6] Creating vertical Shorts/Reels video...")
-        _create_shorts_video(result, artifact_dir, language, state_key, price_data)
+        _create_shorts_video(result, artifact_dir, module, state_key, price_data)
 
     # ── Step 6: Upload to YouTube ─────────────────────────────────────────────
     if dry_run or skip_upload:
@@ -375,16 +365,17 @@ def _write_script_artifact(artifact_dir: Path, script: str) -> str:
     return str(script_path)
 
 
-def _create_shorts_video(result, artifact_dir, language, state_key, price_data):
+def _create_shorts_video(result, artifact_dir, module, state_key, price_data):
     """Build the vertical Shorts/Reels video: short script + own voiceover + portrait template.
 
     Self-contained — does not depend on the long landscape video's artifacts, so it also
     works in shorts-only mode. Mutates ``result`` with status/paths.
     """
+    language = module.language_for(state_key)
     shorts_path = str(artifact_dir / "shorts.mp4")
     try:
         # Short, punchy ~30s script + its own voiceover so the Short stays under a minute.
-        short_script = generate_short_script(language, state_key, price_data)
+        short_script = module.generate_short_script(state_key, price_data)
         short_script_path = artifact_dir / "shorts_script.txt"
         short_script_path.write_text(short_script, encoding="utf-8")
         result["shorts_script_path"] = str(short_script_path)
@@ -396,7 +387,7 @@ def _create_shorts_video(result, artifact_dir, language, state_key, price_data):
 
         # Purpose-built portrait 9:16 template that fills the screen.
         shorts_thumb_path = str(artifact_dir / "shorts_thumbnail.jpg")
-        generate_vertical_thumbnail(language, state_key, price_data, shorts_thumb_path)
+        module.render_vertical_thumbnail(state_key, price_data, shorts_thumb_path)
         result["shorts_thumbnail_path"] = shorts_thumb_path
 
         create_vertical_video(
@@ -421,7 +412,7 @@ def _create_shorts_video(result, artifact_dir, language, state_key, price_data):
 
 
 def _upload_short_video(
-    result, artifact_dir, state_key, config, language, privacy_status,
+    result, artifact_dir, module, state_key, language, privacy_status,
     *, require_approval, force_upload,
 ):
     """Upload the vertical Short to YouTube. Mirrors Step 6 but targets the shorts file.
@@ -455,7 +446,7 @@ def _upload_short_video(
         return
 
     logger.info("[6/6] Uploading Short to YouTube...")
-    token_file = config.get("youtube_token_file")
+    token_file = module.channel_meta(state_key).get("youtube_token_file")
     try:
         video_id = upload_video(
             video_path=result["shorts_video_path"],
@@ -563,7 +554,8 @@ def _record_upload(state_key: str, run_date: str, video_id: str, url: str, priva
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate and optionally upload regional gold-price videos.")
+    parser = argparse.ArgumentParser(description="Generate and optionally upload regional content videos.")
+    parser.add_argument("--module", default="gold", help="Content module / show to run (default: gold).")
     parser.add_argument("--dry-run", action="store_true", help="Generate local artifacts but skip YouTube upload.")
     parser.add_argument("--skip-upload", action="store_true", help="Skip YouTube upload after local video generation.")
     parser.add_argument("--force-upload", action="store_true", help="Allow uploading even if this state/date was already uploaded.")
@@ -577,7 +569,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Skip upload unless the state artifact folder contains the upload approval marker.",
     )
     parser.add_argument("--no-notify", action="store_true", help="Do not send configured run notifications.")
-    parser.add_argument("--state", help="Process only one state key from CHANNEL_CONFIG.")
+    parser.add_argument("--state", help="Process only one channel key for the selected module.")
     parser.add_argument(
         "--privacy",
         choices=("private", "unlisted", "public"),
@@ -587,59 +579,46 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _validate_thumbnail_fonts(enabled: dict) -> bool:
-    languages = [config["language"] for config in enabled.values()]
-    font_results = check_required_fonts(languages)
-    missing = {
-        language: result
-        for language, result in font_results.items()
-        if not result["ok"]
-    }
-    if not missing:
-        for language, result in font_results.items():
-            logger.info(
-                f"Thumbnail font preflight OK for {language}: "
-                f"{', '.join(result['installed'])}"
-            )
-        return True
-
-    for language, result in missing.items():
-        logger.error(
-            f"Missing thumbnail font for {language}. Install one of: "
-            f"{', '.join(result['required_any_of'])}"
-        )
-    return False
-
-
 def main(argv: list[str] | None = None):
     args = _parse_args(argv)
-    logger.info(f"🚀 Gold Price Bot starting — {today_str}")
+    try:
+        module = get_module(args.module)
+    except KeyError as e:
+        logger.error(str(e).strip('"'))
+        return 2
+    logger.info(f"🚀 Content bot starting — {module.key} — {today_str}")
     logger.info(
-        f"Options: dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
-        f"state={args.state or 'enabled'}, privacy={args.privacy}, "
+        f"Options: module={args.module}, dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
+        f"channel={args.state or 'enabled'}, privacy={args.privacy}, "
         f"force_upload={args.force_upload}, require_approval={args.require_approval}, "
         f"shorts={args.shorts}, shorts_only={args.shorts_only}, "
         f"trend_cards={args.trend_cards}, notify={not args.no_notify}"
     )
 
+    available = module.channels()
     if args.state:
-        if args.state not in CHANNEL_CONFIG:
-            available = ", ".join(CHANNEL_CONFIG.keys())
-            logger.error(f"Unknown state '{args.state}'. Available options: {available}")
+        # Allow explicitly selecting a channel even if it is disabled, as long as it exists.
+        try:
+            module.channel_meta(args.state)
+        except KeyError:
+            logger.error(
+                f"Unknown channel '{args.state}' for module '{module.key}'. "
+                f"Available: {', '.join(available)}"
+            )
             return 2
-        enabled = {args.state: CHANNEL_CONFIG[args.state]}
+        channels = [args.state]
     else:
-        enabled = {k: v for k, v in CHANNEL_CONFIG.items() if v.get("enabled", True)}
+        channels = available
 
-    logger.info(f"Channels to process: {list(enabled.keys())}")
-    if not _validate_thumbnail_fonts(enabled):
+    logger.info(f"Channels to process: {channels}")
+    if not module.preflight(channels):
         return 1
 
     all_results = {}
-    for state_key, config in enabled.items():
-        result = run_pipeline_for_state(
+    for state_key in channels:
+        result = run_pipeline_for_channel(
+            module,
             state_key,
-            config,
             dry_run=args.dry_run,
             skip_upload=args.skip_upload,
             privacy_status=args.privacy,

@@ -43,17 +43,17 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 
 | ID | Requirement | Phase | Priority | Status | Owner |
 |----|-------------|-------|----------|--------|-------|
-| PLAT-001 | ContentModule interface (the seam) | 1 | P0 | TODO | |
-| PLAT-002 | Extract Gold into a module | 1 | P0 | TODO | |
-| PLAT-003 | Engine delegates to module (no behavior change) | 1 | P0 | TODO | |
+| PLAT-001 | ContentModule interface (the seam) | 1 | P0 | DONE | |
+| PLAT-002 | Extract Gold into a module | 1 | P0 | DONE | |
+| PLAT-003 | Engine delegates to module (no behavior change) | 1 | P0 | DONE | |
 | PLAT-004 | Shared script engine (tone/language as platform asset) | 2 | P0 | TODO | |
 | PLAT-005 | Jobs/Shows config layer | 3 | P0 | TODO | |
 | PLAT-006 | Scheduler / orchestrator for due jobs | 3 | P1 | TODO | |
-| PLAT-007 | Optional history per module (`needs_history`) | 1 | P0 | TODO | |
+| PLAT-007 | Optional history per module (`needs_history`) | 1 | P0 | DONE | |
 | PLAT-008 | Generalized dedupe & run keys | 3 | P1 | TODO | |
 | TMPL-001 | Template component library | 4 | P1 | TODO | |
 | TMPL-002 | Per-show branding system | 4 | P1 | TODO | |
-| MOD-GOLD-001 | Gold module parity after refactor | 1 | P0 | TODO | |
+| MOD-GOLD-001 | Gold module parity after refactor | 1 | P0 | DONE | |
 | MOD-STOCK-001 | Stocks module (API data, market calendar) | 5 | P1 | TODO | |
 | MOD-STOCK-002 | Stocks charts & stat cards | 5 | P1 | TODO | |
 | MOD-STOCK-003 | Financial-advice disclaimer | 5 | P0 | TODO | |
@@ -72,7 +72,7 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 
 ### PLAT-001: ContentModule Interface
 
-**Phase:** 1 · **Priority:** P0 · **Status:** TODO
+**Phase:** 1 · **Priority:** P0 · **Status:** DONE
 
 Define a single interface (Python `Protocol`/ABC) that every show implements. The engine must call only
 these methods and must never reference a specific domain (gold, stocks, etc.).
@@ -93,7 +93,7 @@ Acceptance criteria:
 
 ### PLAT-002: Extract Gold Into a Module
 
-**Phase:** 1 · **Priority:** P0 · **Status:** TODO
+**Phase:** 1 · **Priority:** P0 · **Status:** DONE
 
 Move all gold-specific logic (`scraper.get_state_prices`, `price_validator`, gold history,
 gold prompt facts, gold card template, per-state YouTube metadata) into `modules/gold/` behind PLAT-001.
@@ -105,7 +105,7 @@ Acceptance criteria:
 
 ### PLAT-003: Engine Delegates to Module
 
-**Phase:** 1 · **Priority:** P0 · **Status:** TODO
+**Phase:** 1 · **Priority:** P0 · **Status:** DONE
 
 Refactor `main.py` so the pipeline (fetch → validate → context → script → voice → template → video →
 publish → review) delegates each domain-specific step to the selected module. Keep all generic
@@ -170,7 +170,7 @@ Acceptance criteria:
 
 ### PLAT-007: Optional History Per Module
 
-**Phase:** 1 · **Priority:** P0 · **Status:** TODO
+**Phase:** 1 · **Priority:** P0 · **Status:** DONE
 
 Generalize history/state so some modules persist series (gold, stocks) and some are stateless (horoscope).
 
@@ -225,7 +225,7 @@ Acceptance criteria:
 
 ### MOD-GOLD-001: Gold Module Parity
 
-**Phase:** 1 · **Priority:** P0 · **Status:** TODO
+**Phase:** 1 · **Priority:** P0 · **Status:** DONE — verified via andhra_pradesh dry run end-to-end
 
 After PLAT-002/003, the gold show must retain all current behavior.
 
