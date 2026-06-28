@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 # 4. Create directories
 echo "[4/6] Creating required directories..."
-mkdir -p output/videos logs credentials/youtube
+mkdir -p output/runs data logs credentials/youtube
 
 # 5. Set up .env
 echo "[5/6] Setting up environment..."
@@ -67,8 +67,8 @@ echo "  3. Authorize each YouTube channel (run on a machine with a browser):"
 echo "     python setup_youtube_auth.py --all"
 echo "     Then upload credentials/youtube/*.json to the VPS"
 echo ""
-echo "  4. Test a single run:"
-echo "     cd $PROJECT_DIR && source venv/bin/activate && python main.py"
+echo "  4. Test a single dry run:"
+echo "     cd $PROJECT_DIR && source venv/bin/activate && python main.py --dry-run"
 echo ""
 echo "  5. Cron is set for 7:30 AM IST (2:00 AM UTC) daily."
 echo "     Check: crontab -l"

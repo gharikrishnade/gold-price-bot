@@ -104,6 +104,7 @@ def generate_script(language: str, state_key: str, price_data: dict) -> str:
         if is_cached else
         "These are today's live prices."
     )
+    comparison_note = _format_history_context(price_data.get("history_context", {}))
 
     prompt = f"""You are a professional news anchor script writer for a YouTube channel about gold prices.
 
@@ -117,6 +118,9 @@ City-wise Gold Rates:
 
 DATA NOTE: {data_note}
 
+COMPARISON DATA:
+{comparison_note}
+
 SCRIPT REQUIREMENTS:
 1. Start with "{meta['greeting']}" and a warm welcome to the channel
 2. State the date clearly
@@ -127,7 +131,8 @@ SCRIPT REQUIREMENTS:
 7. Keep it conversational and natural — like a friendly news anchor, NOT robotic
 8. Write ONLY in {meta['name']} script (no English mixed in, except numbers and ₹ symbol)
 9. Total length: ~150-200 words (for ~60-90 seconds of speech)
-10. Do NOT mention price increases, decreases, trends, or comparisons unless comparison data is explicitly provided.
+10. Mention increases, decreases, unchanged prices, or weekly trends only when COMPARISON DATA says they are available.
+11. If COMPARISON DATA says unavailable, do NOT mention price movement, trends, yesterday, or weekly comparisons.
 
 Write ONLY the script text — no stage directions, no [brackets], no notes. Just the spoken words.
 """
@@ -137,6 +142,41 @@ Write ONLY the script text — no stage directions, no [brackets], no notes. Jus
     script = message.content[0].text.strip()
     logger.info(f"Generated {language} script ({len(script.split())} words)")
     return script
+
+
+def _format_history_context(history_context: dict) -> str:
+    if not history_context or not history_context.get("has_comparison"):
+        return "Historical comparison is unavailable. Avoid all price movement and trend language."
+
+    previous_date = history_context.get("previous_available_date")
+    lines = [f"Previous available market data date: {previous_date}"]
+    for city, comparisons in history_context.get("city_comparisons", {}).items():
+        parts = []
+        for karat in ("22k", "24k"):
+            data = comparisons.get(karat)
+            if not data:
+                continue
+            parts.append(
+                f"{karat.upper()} {data['direction']} by ₹{abs(data['change_per_gram']):g}/gram "
+                f"(from ₹{data['previous_per_gram']:g} to ₹{data['current_per_gram']:g})"
+            )
+        if parts:
+            lines.append(f"- {city}: " + "; ".join(parts))
+
+    weekly_summary = history_context.get("weekly_summary") or {}
+    if weekly_summary:
+        lines.append("Weekly trend based on stored prior observations:")
+        for karat in ("22k", "24k"):
+            trend = weekly_summary.get(karat)
+            if not trend:
+                continue
+            lines.append(
+                f"- {karat.upper()} average {trend['direction']} by "
+                f"₹{abs(trend['change_per_gram']):g}/gram "
+                f"from {trend['first_date']} to {trend['last_date']}."
+            )
+
+    return "\n".join(lines)
 
 
 def _create_message_with_retries(prompt: str):
