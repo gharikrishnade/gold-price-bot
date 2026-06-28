@@ -124,6 +124,12 @@ Skip upload even outside dry-run mode:
 python main.py --state andhra_pradesh --skip-upload
 ```
 
+Skip configured notifications for a local run:
+
+```bash
+python main.py --state telangana --dry-run --no-notify
+```
+
 The bot records successful uploads in `logs/upload_history.json` and skips duplicate uploads for the same state/date unless you pass:
 
 ```bash
@@ -133,6 +139,25 @@ python main.py --state telangana --force-upload
 ## Historical Prices
 
 Validated prices are stored in SQLite at `data/gold_prices.sqlite` by default. The script generator only receives comparison data when previous stored prices exist. If history is unavailable, the prompt explicitly forbids price movement and trend language.
+
+## Notifications
+
+Notifications are optional and disabled unless you configure a channel in `.env`.
+
+Slack incoming webhook:
+
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+```
+
+Telegram bot:
+
+```bash
+TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_CHAT_ID=123456789
+```
+
+Daily run notifications include completed states, failed states, generated video paths, YouTube links when available, and summary paths.
 
 ## VPS Deployment
 
