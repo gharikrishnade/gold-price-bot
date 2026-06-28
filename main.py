@@ -49,7 +49,7 @@ from scraper import get_state_prices
 from script_generator import generate_script
 from thumbnail_generator import check_required_fonts, generate_thumbnail
 from tts_generator import generate_voiceover
-from video_creator import create_video
+from video_creator import create_vertical_video, create_video
 from youtube_uploader import build_video_metadata, upload_video
 from price_validator import validate_state_price_data
 from price_history import build_history_context, store_price_data
@@ -76,6 +76,7 @@ def run_pipeline_for_state(
     skip_upload: bool = False,
     privacy_status: str = DEFAULT_UPLOAD_PRIVACY,
     force_upload: bool = False,
+    create_shorts: bool = False,
     require_approval: bool = DEFAULT_REQUIRE_UPLOAD_APPROVAL,
 ) -> dict:
     """Run the full pipeline for one state/channel."""
@@ -88,6 +89,7 @@ def run_pipeline_for_state(
         "region_name": config.get("region_name"),
         "dry_run": dry_run,
         "privacy_status": privacy_status,
+        "create_shorts": create_shorts,
         "require_upload_approval": require_approval,
         "scrape_status": "pending",
         "price_validation_status": "pending",
@@ -95,6 +97,7 @@ def run_pipeline_for_state(
         "thumbnail_status": "pending",
         "audio_status": "pending",
         "video_status": "pending",
+        "shorts_status": "not_requested",
         "history_storage_status": "pending",
         "upload_status": "pending",
     }
@@ -106,7 +109,10 @@ def run_pipeline_for_state(
     logger.info(f"\n{'='*60}")
     logger.info(f"Processing: {state_key} ({language})")
     logger.info(f"{'='*60}")
-    logger.info(f"Run options for {state_key}: dry_run={dry_run}, skip_upload={skip_upload}, privacy={privacy_status}")
+    logger.info(
+        f"Run options for {state_key}: dry_run={dry_run}, skip_upload={skip_upload}, "
+        f"privacy={privacy_status}, shorts={create_shorts}, require_approval={require_approval}"
+    )
 
     # ── Step 1: Scrape gold prices ────────────────────────────────────────────
     logger.info("[1/6] Scraping gold prices...")
@@ -229,6 +235,25 @@ def run_pipeline_for_state(
         result["video_status"] = "failed"
         result["error"] = f"video: {e}"
         return result
+
+    if create_shorts:
+        logger.info("[5b/6] Creating vertical Shorts/Reels video...")
+        shorts_path = str(artifact_dir / "shorts.mp4")
+        try:
+            create_vertical_video(
+                thumbnail_path=thumb_for_video,
+                audio_path=audio_path,
+                output_path=shorts_path,
+            )
+            result["shorts_video_path"] = shorts_path
+            shorts_size_mb = Path(shorts_path).stat().st_size / (1024 * 1024)
+            result["shorts_video_size_mb"] = round(shorts_size_mb, 2)
+            result["shorts_status"] = "success"
+            logger.info(f"  ✅ Shorts/Reels video: {shorts_path} ({shorts_size_mb:.1f} MB)")
+        except Exception as e:
+            logger.exception(f"  ❌ Shorts/Reels video creation failed for {state_key}: {e}")
+            result["shorts_status"] = "failed"
+            result["shorts_error"] = str(e)
 
     # ── Step 6: Upload to YouTube ─────────────────────────────────────────────
     if dry_run or skip_upload:
@@ -406,6 +431,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Generate local artifacts but skip YouTube upload.")
     parser.add_argument("--skip-upload", action="store_true", help="Skip YouTube upload after local video generation.")
     parser.add_argument("--force-upload", action="store_true", help="Allow uploading even if this state/date was already uploaded.")
+    parser.add_argument("--shorts", action="store_true", help="Also create a vertical 9:16 Shorts/Reels MP4.")
     parser.add_argument(
         "--require-approval",
         action=argparse.BooleanOptionalAction,
@@ -454,7 +480,7 @@ def main(argv: list[str] | None = None):
         f"Options: dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
         f"state={args.state or 'enabled'}, privacy={args.privacy}, "
         f"force_upload={args.force_upload}, require_approval={args.require_approval}, "
-        f"notify={not args.no_notify}"
+        f"shorts={args.shorts}, notify={not args.no_notify}"
     )
 
     if args.state:
@@ -479,6 +505,7 @@ def main(argv: list[str] | None = None):
             skip_upload=args.skip_upload,
             privacy_status=args.privacy,
             force_upload=args.force_upload,
+            create_shorts=args.shorts,
             require_approval=args.require_approval,
         )
         all_results[state_key] = result
