@@ -46,10 +46,10 @@ logger = logging.getLogger("main")
 
 from config import CHANNEL_CONFIG, DEFAULT_UPLOAD_PRIVACY
 from scraper import get_state_prices
-from script_generator import generate_script
-from thumbnail_generator import check_required_fonts, generate_thumbnail
+from script_generator import generate_script, generate_short_script
+from thumbnail_generator import check_required_fonts, generate_thumbnail, generate_vertical_thumbnail
 from tts_generator import generate_voiceover
-from video_creator import create_vertical_video, create_video
+from video_creator import create_vertical_video, create_video, save_trend_preview
 from youtube_uploader import build_video_metadata, upload_video
 from price_validator import validate_state_price_data
 from price_history import build_history_context, store_price_data
@@ -77,9 +77,13 @@ def run_pipeline_for_state(
     privacy_status: str = DEFAULT_UPLOAD_PRIVACY,
     force_upload: bool = False,
     create_shorts: bool = False,
+    shorts_only: bool = False,
+    trend_cards: bool = False,
     require_approval: bool = DEFAULT_REQUIRE_UPLOAD_APPROVAL,
 ) -> dict:
     """Run the full pipeline for one state/channel."""
+    if shorts_only:
+        create_shorts = True
     started_at = datetime.now().isoformat(timespec="seconds")
     result = {
         "run_date": today_str,
@@ -90,6 +94,8 @@ def run_pipeline_for_state(
         "dry_run": dry_run,
         "privacy_status": privacy_status,
         "create_shorts": create_shorts,
+        "shorts_only": shorts_only,
+        "trend_cards": trend_cards,
         "require_upload_approval": require_approval,
         "scrape_status": "pending",
         "price_validation_status": "pending",
@@ -97,6 +103,7 @@ def run_pipeline_for_state(
         "thumbnail_status": "pending",
         "audio_status": "pending",
         "video_status": "pending",
+        "trend_cards_status": "not_requested",
         "shorts_status": "not_requested",
         "history_storage_status": "pending",
         "upload_status": "pending",
@@ -111,7 +118,8 @@ def run_pipeline_for_state(
     logger.info(f"{'='*60}")
     logger.info(
         f"Run options for {state_key}: dry_run={dry_run}, skip_upload={skip_upload}, "
-        f"privacy={privacy_status}, shorts={create_shorts}, require_approval={require_approval}"
+        f"privacy={privacy_status}, shorts={create_shorts}, shorts_only={shorts_only}, "
+        f"trend_cards={trend_cards}, require_approval={require_approval}"
     )
 
     # ── Step 1: Scrape gold prices ────────────────────────────────────────────
@@ -157,6 +165,30 @@ def run_pipeline_for_state(
         logger.exception(f"  ❌ Historical price storage failed for {state_key}: {e}")
         result["history_storage_status"] = "failed"
         result["error"] = f"history_storage: {e}"
+        return result
+
+    # ── Shorts-only mode: skip the long landscape video pipeline entirely ──────
+    if shorts_only:
+        logger.info("Shorts-only mode: skipping long landscape script/thumbnail/voiceover/video.")
+        for skipped in ("script_generation_status", "thumbnail_status", "audio_status", "video_status"):
+            result[skipped] = "skipped_shorts_only"
+        _create_shorts_video(result, artifact_dir, language, state_key, price_data)
+
+        # ── Step 6: Upload the Short ───────────────────────────────────────────
+        if dry_run or skip_upload:
+            reason = "dry_run" if dry_run else "skip_upload"
+            result["upload_status"] = "skipped"
+            result["upload_skip_reason"] = reason
+            logger.info(f"[6/6] Upload skipped intentionally ({reason})")
+        elif result.get("shorts_status") != "success":
+            result["upload_status"] = "skipped"
+            result["upload_skip_reason"] = "shorts_not_created"
+            logger.warning("[6/6] Upload skipped: Short was not created successfully.")
+        else:
+            _upload_short_video(
+                result, artifact_dir, state_key, config, language, privacy_status,
+                require_approval=require_approval, force_upload=force_upload,
+            )
         return result
 
     # ── Step 2: Generate script ───────────────────────────────────────────────
@@ -213,12 +245,29 @@ def run_pipeline_for_state(
     )
 
     try:
+        if trend_cards:
+            trend_preview_path = str(artifact_dir / "trend_preview.jpg")
+            preview_path = save_trend_preview(
+                thumbnail_path=thumb_for_video,
+                output_path=trend_preview_path,
+                price_data=price_data,
+                language=language,
+                state_key=state_key,
+            )
+            if preview_path:
+                result["trend_preview_path"] = preview_path
+                result["trend_cards_status"] = "success"
+            else:
+                result["trend_cards_status"] = "skipped_no_history"
+
         create_video(
             thumbnail_path=thumb_for_video,
             audio_path=audio_path,
             output_path=video_path,
             price_data=price_data,
             language=language,
+            state_key=state_key,
+            enable_trend_cards=trend_cards,
         )
         result["video_path"] = video_path
         size_mb = Path(video_path).stat().st_size / (1024 * 1024)
@@ -238,22 +287,7 @@ def run_pipeline_for_state(
 
     if create_shorts:
         logger.info("[5b/6] Creating vertical Shorts/Reels video...")
-        shorts_path = str(artifact_dir / "shorts.mp4")
-        try:
-            create_vertical_video(
-                thumbnail_path=thumb_for_video,
-                audio_path=audio_path,
-                output_path=shorts_path,
-            )
-            result["shorts_video_path"] = shorts_path
-            shorts_size_mb = Path(shorts_path).stat().st_size / (1024 * 1024)
-            result["shorts_video_size_mb"] = round(shorts_size_mb, 2)
-            result["shorts_status"] = "success"
-            logger.info(f"  ✅ Shorts/Reels video: {shorts_path} ({shorts_size_mb:.1f} MB)")
-        except Exception as e:
-            logger.exception(f"  ❌ Shorts/Reels video creation failed for {state_key}: {e}")
-            result["shorts_status"] = "failed"
-            result["shorts_error"] = str(e)
+        _create_shorts_video(result, artifact_dir, language, state_key, price_data)
 
     # ── Step 6: Upload to YouTube ─────────────────────────────────────────────
     if dry_run or skip_upload:
@@ -339,6 +373,108 @@ def _write_script_artifact(artifact_dir: Path, script: str) -> str:
     script_path = artifact_dir / "script.txt"
     script_path.write_text(script, encoding="utf-8")
     return str(script_path)
+
+
+def _create_shorts_video(result, artifact_dir, language, state_key, price_data):
+    """Build the vertical Shorts/Reels video: short script + own voiceover + portrait template.
+
+    Self-contained — does not depend on the long landscape video's artifacts, so it also
+    works in shorts-only mode. Mutates ``result`` with status/paths.
+    """
+    shorts_path = str(artifact_dir / "shorts.mp4")
+    try:
+        # Short, punchy ~30s script + its own voiceover so the Short stays under a minute.
+        short_script = generate_short_script(language, state_key, price_data)
+        short_script_path = artifact_dir / "shorts_script.txt"
+        short_script_path.write_text(short_script, encoding="utf-8")
+        result["shorts_script_path"] = str(short_script_path)
+
+        shorts_audio_path = _generate_voiceover_with_retries(
+            short_script, language, str(artifact_dir / "shorts_voiceover.mp3"), state_key
+        )
+        result["shorts_audio_path"] = shorts_audio_path
+
+        # Purpose-built portrait 9:16 template that fills the screen.
+        shorts_thumb_path = str(artifact_dir / "shorts_thumbnail.jpg")
+        generate_vertical_thumbnail(language, state_key, price_data, shorts_thumb_path)
+        result["shorts_thumbnail_path"] = shorts_thumb_path
+
+        create_vertical_video(
+            thumbnail_path=shorts_thumb_path,
+            audio_path=shorts_audio_path,
+            output_path=shorts_path,
+            vertical_frame_path=shorts_thumb_path,
+        )
+        result["shorts_video_path"] = shorts_path
+        shorts_size_mb = Path(shorts_path).stat().st_size / (1024 * 1024)
+        result["shorts_video_size_mb"] = round(shorts_size_mb, 2)
+        result["shorts_duration_seconds"] = _audio_duration_seconds(shorts_audio_path)
+        result["shorts_status"] = "success"
+        logger.info(
+            f"  ✅ Shorts/Reels video: {shorts_path} ({shorts_size_mb:.1f} MB, "
+            f"{result['shorts_duration_seconds'] or 0:.0f}s)"
+        )
+    except Exception as e:
+        logger.exception(f"  ❌ Shorts/Reels video creation failed for {state_key}: {e}")
+        result["shorts_status"] = "failed"
+        result["shorts_error"] = str(e)
+
+
+def _upload_short_video(
+    result, artifact_dir, state_key, config, language, privacy_status,
+    *, require_approval, force_upload,
+):
+    """Upload the vertical Short to YouTube. Mirrors Step 6 but targets the shorts file.
+
+    Assumes dry_run / skip_upload are already handled by the caller. Short uploads are
+    tracked under a ``<state>__shorts`` history key so they don't clash with the long video.
+    """
+    if require_approval and not _upload_approved(artifact_dir):
+        marker_path = _approval_marker_path(artifact_dir)
+        instructions_path = _write_approval_instructions(artifact_dir, marker_path, state_key)
+        result["upload_status"] = "skipped"
+        result["upload_skip_reason"] = "manual_approval_required"
+        result["approval_instructions_path"] = str(instructions_path)
+        logger.warning(
+            f"[6/6] Short upload skipped for {state_key}: manual approval required. "
+            f"Review artifacts and create {marker_path} to approve upload."
+        )
+        return
+
+    short_key = f"{state_key}__shorts"
+    existing_upload = _find_existing_upload(short_key, today_str)
+    if existing_upload and not force_upload:
+        result["upload_status"] = "skipped"
+        result["upload_skip_reason"] = "duplicate_upload_protection"
+        result["youtube_video_id"] = existing_upload.get("video_id")
+        result["youtube_url"] = existing_upload.get("url")
+        logger.warning(
+            f"[6/6] Short upload skipped for {state_key}: already uploaded today. "
+            f"Use --force-upload to override."
+        )
+        return
+
+    logger.info("[6/6] Uploading Short to YouTube...")
+    token_file = config.get("youtube_token_file")
+    try:
+        video_id = upload_video(
+            video_path=result["shorts_video_path"],
+            language=language,
+            state_key=state_key,
+            channel_token_file=token_file,
+            thumbnail_path=result.get("shorts_thumbnail_path"),
+            privacy_status=privacy_status,
+            shorts=True,
+        )
+        result["youtube_video_id"] = video_id
+        result["youtube_url"] = f"https://youtu.be/{video_id}"
+        result["upload_status"] = "success"
+        _record_upload(short_key, today_str, video_id, result["youtube_url"], privacy_status)
+        logger.info(f"  ✅ Live (Short): https://youtu.be/{video_id}")
+    except Exception as e:
+        logger.exception(f"  ❌ Short upload failed for {state_key}: {e}")
+        result["upload_status"] = "failed"
+        result["error"] = f"upload: {e}"
 
 
 def _approval_marker_path(artifact_dir: Path) -> Path:
@@ -432,6 +568,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--skip-upload", action="store_true", help="Skip YouTube upload after local video generation.")
     parser.add_argument("--force-upload", action="store_true", help="Allow uploading even if this state/date was already uploaded.")
     parser.add_argument("--shorts", action="store_true", help="Also create a vertical 9:16 Shorts/Reels MP4.")
+    parser.add_argument("--shorts-only", action="store_true", help="Create ONLY the vertical Shorts/Reels MP4 — skip the long landscape video.")
+    parser.add_argument("--trend-cards", action="store_true", help="Add an animated regional trend-card segment when price history exists.")
     parser.add_argument(
         "--require-approval",
         action=argparse.BooleanOptionalAction,
@@ -480,7 +618,8 @@ def main(argv: list[str] | None = None):
         f"Options: dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
         f"state={args.state or 'enabled'}, privacy={args.privacy}, "
         f"force_upload={args.force_upload}, require_approval={args.require_approval}, "
-        f"shorts={args.shorts}, notify={not args.no_notify}"
+        f"shorts={args.shorts}, shorts_only={args.shorts_only}, "
+        f"trend_cards={args.trend_cards}, notify={not args.no_notify}"
     )
 
     if args.state:
@@ -506,6 +645,8 @@ def main(argv: list[str] | None = None):
             privacy_status=args.privacy,
             force_upload=args.force_upload,
             create_shorts=args.shorts,
+            shorts_only=args.shorts_only,
+            trend_cards=args.trend_cards,
             require_approval=args.require_approval,
         )
         all_results[state_key] = result
