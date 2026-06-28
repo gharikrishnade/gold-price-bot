@@ -46,7 +46,7 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 | PLAT-001 | ContentModule interface (the seam) | 1 | P0 | DONE | |
 | PLAT-002 | Extract Gold into a module | 1 | P0 | DONE | |
 | PLAT-003 | Engine delegates to module (no behavior change) | 1 | P0 | DONE | |
-| PLAT-004 | Shared script engine (tone/language as platform asset) | 2 | P0 | TODO | |
+| PLAT-004 | Shared script engine (tone/language as platform asset) | 2 | P0 | DONE | |
 | PLAT-005 | Jobs/Shows config layer | 3 | P0 | TODO | |
 | PLAT-006 | Scheduler / orchestrator for due jobs | 3 | P1 | TODO | |
 | PLAT-007 | Optional history per module (`needs_history`) | 1 | P0 | DONE | |
@@ -118,7 +118,7 @@ Acceptance criteria:
 
 ### PLAT-004: Shared Script Engine
 
-**Phase:** 2 · **Priority:** P0 · **Status:** TODO
+**Phase:** 2 · **Priority:** P0 · **Status:** DONE — script_engine.py owns persona/tone/language/CTA + LANGUAGE_META; gold builds ScriptBriefs. Verified gold long+short parity end-to-end.
 
 Promote the existing regional scripting rules (regional currency/units, no Latin letters, carat spelled
 out, polite-conversational tone, plain everyday words, code-mixing transliterated into the native script,
