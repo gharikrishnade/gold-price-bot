@@ -15,6 +15,9 @@ import os
 import sys
 import tempfile
 import logging
+import base64
+import io
+from html import escape
 import numpy as np
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
@@ -29,6 +32,7 @@ FADE_OUT = 1.5
 ZOOM_START = 1.0
 ZOOM_END   = 1.0    # no zoom — static image with fade in/out only
 TREND_SEGMENT_SECONDS = 12
+TREND_RENDER_FPS = 12
 
 
 def _import_moviepy():
@@ -131,21 +135,31 @@ def create_video(
         logger.info("Trend cards requested, but not enough history is available")
 
     trend_cache: dict[int, np.ndarray] = {}
+    trend_renderer = None
+    if trend_enabled:
+        try:
+            trend_renderer = _BrowserTrendRenderer(img_array)
+        except Exception as e:
+            logger.warning(f"Browser trend-card renderer unavailable; skipping trend cards: {e}")
+            trend_enabled = False
+            trend_duration = 0
 
     # ── Ken Burns make_frame ──────────────────────────────────────────────────
     def make_frame(t):
-        if trend_duration and t < trend_duration:
-            frame_key = int(t * FPS)
-            if frame_key not in trend_cache:
-                trend_cache[frame_key] = _build_trend_frame(
-                    thumbnail_frame=img_array,
-                    price_data=price_data or {},
-                    language=language,
-                    state_key=state_key,
-                    t=t,
-                    duration=trend_duration,
-                )
-            return trend_cache[frame_key]
+        if trend_duration and trend_renderer and t < trend_duration:
+            frame_key = int(t * TREND_RENDER_FPS)
+            try:
+                if frame_key not in trend_cache:
+                    trend_cache[frame_key] = trend_renderer.render_frame(
+                        price_data=price_data or {},
+                        language=language,
+                        state_key=state_key,
+                        t=frame_key / TREND_RENDER_FPS,
+                        duration=trend_duration,
+                    )
+                return trend_cache[frame_key]
+            except Exception as e:
+                logger.warning(f"Trend-card frame render failed; falling back to thumbnail frame: {e}")
 
         zoom = ZOOM_START + (ZOOM_END - ZOOM_START) * (t / duration)
         zw, zh = int(OUT_W * zoom), int(OUT_H * zoom)
@@ -184,7 +198,11 @@ def create_video(
         logger=None,
     )
 
-    final.write_videofile(output_path, **write_kwargs)
+    try:
+        final.write_videofile(output_path, **write_kwargs)
+    finally:
+        if trend_renderer:
+            trend_renderer.close()
 
     size_mb = Path(output_path).stat().st_size / (1024 * 1024)
     logger.info(f"  ✅ Done: {output_path} ({size_mb:.1f} MB, {duration:.1f}s)")
@@ -206,17 +224,25 @@ def save_trend_preview(
         return None
 
     frame = np.array(Image.open(thumbnail_path).convert("RGB").resize((OUT_W, OUT_H), Image.LANCZOS))
-    preview = _build_trend_frame(
-        thumbnail_frame=frame,
-        price_data=price_data,
-        language=language,
-        state_key=state_key,
-        t=TREND_SEGMENT_SECONDS * 0.72,
-        duration=TREND_SEGMENT_SECONDS,
-    )
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(preview).save(output_path, "JPEG", quality=92)
-    return output_path
+    renderer = None
+    try:
+        renderer = _BrowserTrendRenderer(frame)
+        preview = renderer.render_frame(
+            price_data=price_data,
+            language=language,
+            state_key=state_key,
+            t=TREND_SEGMENT_SECONDS * 0.72,
+            duration=TREND_SEGMENT_SECONDS,
+        )
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(preview).save(output_path, "JPEG", quality=92)
+        return output_path
+    except Exception as e:
+        logger.warning(f"Trend preview render skipped because browser text rendering failed: {e}")
+        return None
+    finally:
+        if renderer:
+            renderer.close()
 
 
 def create_vertical_video(
@@ -344,6 +370,365 @@ REGIONAL_VIDEO_LABELS = {
 def _has_trend_series(history_context: dict | None) -> bool:
     series = (history_context or {}).get("trend_series") or []
     return len(series) >= 2
+
+
+class _BrowserTrendRenderer:
+    """Render trend cards through Chromium so Indic text shaping matches thumbnails."""
+
+    def __init__(self, thumbnail_frame: np.ndarray):
+        from playwright.sync_api import sync_playwright
+
+        self._bg_data_url = _frame_data_url(thumbnail_frame)
+        self._playwright = sync_playwright().start()
+        self._browser = self._playwright.chromium.launch()
+        self._page = self._browser.new_page(viewport={"width": OUT_W, "height": OUT_H}, device_scale_factor=1)
+
+    def render_frame(
+        self,
+        *,
+        price_data: dict,
+        language: str,
+        state_key: str | None,
+        t: float,
+        duration: float,
+    ) -> np.ndarray:
+        html = _build_trend_html(
+            bg_data_url=self._bg_data_url,
+            price_data=price_data,
+            language=language,
+            state_key=state_key,
+            t=t,
+            duration=duration,
+        )
+        self._page.set_content(html, wait_until="domcontentloaded")
+        self._page.wait_for_timeout(25)
+        png = self._page.screenshot(
+            type="jpeg",
+            quality=92,
+            clip={"x": 0, "y": 0, "width": OUT_W, "height": OUT_H},
+        )
+        return np.array(Image.open(io.BytesIO(png)).convert("RGB"))
+
+    def close(self) -> None:
+        try:
+            self._browser.close()
+        finally:
+            self._playwright.stop()
+
+
+def _build_trend_html(
+    *,
+    bg_data_url: str,
+    price_data: dict,
+    language: str,
+    state_key: str | None,
+    t: float,
+    duration: float,
+) -> str:
+    labels = _regional_labels(language)
+    series = price_data.get("history_context", {}).get("trend_series") or []
+    cities = price_data.get("cities", {})
+    primary_city = next(iter(cities), "")
+    primary_prices = cities.get(primary_city, {})
+
+    card_progress = _ease(min(1.0, t / 2.0))
+    count_progress = _ease(min(1.0, max(0.0, (t - 1.0) / 2.4)))
+    line_progress = _ease(min(1.0, max(0.0, (t - 3.2) / 4.6)))
+    marker_progress = min(1.0, max(0.0, (t - 7.8) / max(1.0, duration - 7.8)))
+
+    current_22 = float(primary_prices.get("22k_per_gram") or _last_series_value(series, "22k") or 0)
+    current_24 = float(primary_prices.get("24k_per_gram") or _last_series_value(series, "24k") or 0)
+    previous_22 = _previous_series_value(series, "22k", current_22)
+    previous_24 = _previous_series_value(series, "24k", current_24)
+    display_22 = previous_22 + (current_22 - previous_22) * count_progress
+    display_24 = previous_24 + (current_24 - previous_24) * count_progress
+    delta_22 = current_22 - previous_22
+    delta_24 = current_24 - previous_24
+
+    state_name = labels["state_names"].get(state_key or "", (state_key or "").replace("_", " ").title())
+    city_name = _regional_city_name(language, primary_city)
+    movement = _movement_label(labels, delta_24 or delta_22)
+    regional_font = _regional_font_stack(language)
+    title = f"{state_name} {labels['trend']}".strip()
+
+    cards = [
+        (_karat_label(language, "22k"), _price(display_22), _delta(delta_22), "#22c55e"),
+        (_karat_label(language, "24k"), _price(display_24), _delta(delta_24), "#22c55e"),
+        (city_name, _price(float(primary_prices.get("22k_per_10g") or current_22 * 10)), labels["ten_grams"], "#60a5fa"),
+        (labels["change"], movement, labels["today"], "#f6c453"),
+    ]
+    card_html = "\n".join(
+        _trend_card_html(label, value, footer, color, card_progress, idx)
+        for idx, (label, value, footer, color) in enumerate(cards)
+    )
+    chart_svg = _trend_chart_svg(
+        series=series,
+        labels=labels,
+        line_progress=line_progress,
+        marker_progress=marker_progress,
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="{escape(language)}">
+<head>
+<meta charset="UTF-8">
+<style>
+  * {{ box-sizing: border-box; }}
+  body {{
+    width: {OUT_W}px;
+    height: {OUT_H}px;
+    margin: 0;
+    overflow: hidden;
+    font-family: {regional_font}, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    background: #111827;
+    color: #f8fafc;
+  }}
+  .bg {{
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(120deg, rgba(17,24,39,.82), rgba(17,24,39,.72)),
+      url("{bg_data_url}") center / cover no-repeat;
+    filter: blur(14px) brightness(.55);
+    transform: scale(1.04);
+  }}
+  .grid {{
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(74deg, rgba(59,130,246,.16) 0 1px, transparent 1px 96px);
+    opacity: .34;
+  }}
+  .stage {{ position: relative; width: 100%; height: 100%; padding: 58px 90px; }}
+  .title {{
+    font-size: 74px;
+    line-height: 1.08;
+    font-weight: 700;
+    color: #fff7db;
+  }}
+  .subtitle {{
+    margin-top: 8px;
+    font-size: 36px;
+    color: #cbd5e1;
+  }}
+  .date {{
+    position: absolute;
+    right: 90px;
+    top: 68px;
+    width: 318px;
+    height: 77px;
+    border-radius: 26px;
+    background: #f6c453;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 31px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    font-weight: 700;
+  }}
+  .cards {{
+    display: grid;
+    grid-template-columns: 430px 430px 430px 345px;
+    gap: 35px;
+    margin-top: 38px;
+  }}
+  .card {{
+    height: 232px;
+    border-radius: 22px;
+    background: rgba(31,41,55,.96);
+    border: 2px solid rgba(71,85,105,.95);
+    box-shadow: 0 18px 30px rgba(0,0,0,.35);
+    padding: 31px 32px;
+    transform: translateY(var(--offset));
+    opacity: var(--opacity);
+  }}
+  .card-label {{
+    font-size: 32px;
+    color: #cbd5e1;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }}
+  .card-value {{
+    margin-top: 22px;
+    font-size: 62px;
+    line-height: 1;
+    color: #ffffff;
+    white-space: nowrap;
+  }}
+  .pill {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 204px;
+    height: 46px;
+    margin-top: 2px;
+    border-radius: 19px;
+    background: var(--accent);
+    color: #111827;
+    font-size: 27px;
+    line-height: 1;
+    padding: 0 26px;
+  }}
+  .chart {{
+    margin-top: 62px;
+    width: 1740px;
+    height: 427px;
+    border-radius: 24px;
+    background: #0f172a;
+    border: 2px solid #334155;
+    box-shadow: 0 18px 30px rgba(0,0,0,.28);
+    position: relative;
+    overflow: hidden;
+  }}
+  .chart-title {{
+    position: absolute;
+    left: 34px;
+    top: 29px;
+    font-size: 42px;
+    font-weight: 700;
+  }}
+  .legend {{
+    position: absolute;
+    right: 62px;
+    top: 38px;
+    height: 54px;
+    border-radius: 18px;
+    background: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 0 25px;
+    font-size: 27px;
+  }}
+  .dot {{ width: 22px; height: 22px; border-radius: 50%; display: inline-block; margin-right: 10px; }}
+  .footer {{
+    position: absolute;
+    left: 90px;
+    bottom: 45px;
+    font-size: 28px;
+    color: #cbd5e1;
+  }}
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grid"></div>
+  <main class="stage">
+    <div class="title">{escape(title)}</div>
+    <div class="subtitle">{escape(labels['today'])} | 22K &amp; 24K {escape(labels['per_gram'])}</div>
+    <div class="date">{escape(_display_date(price_data))}</div>
+    <section class="cards">{card_html}</section>
+    <section class="chart">
+      <div class="chart-title">{escape(labels['trend'])}</div>
+      <div class="legend">
+        <span><span class="dot" style="background:#f59e0b"></span>24K</span>
+        <span><span class="dot" style="background:#22c55e"></span>22K</span>
+      </div>
+      {chart_svg}
+    </section>
+    <div class="footer">{escape(_regional_footer(language))}</div>
+  </main>
+</body>
+</html>"""
+
+
+def _trend_card_html(label: str, value: str, footer: str, color: str, progress: float, index: int) -> str:
+    offset = int((1 - progress) * (70 + index * 12))
+    opacity = max(0.0, min(1.0, progress))
+    return f"""<article class="card" style="--offset:{offset}px;--opacity:{opacity:.3f};--accent:{color}">
+      <div class="card-label">{escape(label)}</div>
+      <div class="card-value">{escape(value)}</div>
+      <div class="pill">{escape(footer)}</div>
+    </article>"""
+
+
+def _trend_chart_svg(
+    *,
+    series: list[dict],
+    labels: dict,
+    line_progress: float,
+    marker_progress: float,
+) -> str:
+    chart_x, chart_y, chart_w, chart_h = 85, 135, 1570, 230
+    all_values = [float(row[k]) for row in series for k in ("22k", "24k") if row.get(k) is not None]
+    if not all_values:
+        return ""
+    min_val = min(all_values) - 20
+    max_val = max(all_values) + 20
+    points_24 = _series_points(series, "24k", (chart_x, chart_y, chart_x + chart_w, chart_y + chart_h), min_val, max_val)
+    points_22 = _series_points(series, "22k", (chart_x, chart_y, chart_x + chart_w, chart_y + chart_h), min_val, max_val)
+    visible_24 = _visible_points(points_24, line_progress)
+    visible_22 = _visible_points(points_22, line_progress)
+    pulse = 1.0 + 0.24 * np.sin(marker_progress * np.pi * 6)
+    marker_radius = max(0, int(22 * pulse)) if line_progress >= 0.98 and points_24 else 0
+    marker = ""
+    if marker_radius:
+        x, y = points_24[-1]
+        marker = f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{marker_radius}" fill="none" stroke="#fff7db" stroke-width="5" />'
+
+    grid = []
+    for i in range(5):
+        y = chart_y + i * chart_h / 4
+        grid.append(f'<line x1="{chart_x}" y1="{y:.1f}" x2="{chart_x + chart_w}" y2="{y:.1f}" stroke="#1e293b" stroke-width="2" />')
+    for i in range(max(1, len(series))):
+        x = chart_x + i * chart_w / max(1, len(series) - 1)
+        grid.append(f'<line x1="{x:.1f}" y1="{chart_y}" x2="{x:.1f}" y2="{chart_y + chart_h}" stroke="#172033" stroke-width="1" />')
+
+    weekday_labels = labels.get("short_weekdays") or []
+    x_labels = []
+    for idx, row in enumerate(series):
+        x = chart_x + idx * chart_w / max(1, len(series) - 1)
+        if idx == len(series) - 1:
+            label = labels["today"]
+        elif len(series) <= len(weekday_labels):
+            label = weekday_labels[idx]
+        else:
+            label = str(row.get("date", ""))[5:]
+        x_labels.append(f'<text x="{x:.1f}" y="{chart_y + chart_h + 52}" text-anchor="middle" fill="#94a3b8" font-size="24">{escape(label)}</text>')
+
+    circles = []
+    for x, y in visible_24[:-1]:
+        circles.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="#f59e0b" />')
+    for x, y in visible_22[:-1]:
+        circles.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="#22c55e" />')
+
+    return f"""<svg width="1740" height="427" viewBox="0 0 1740 427" style="position:absolute;left:0;top:0">
+      {''.join(grid)}
+      <polyline points="{_points_attr(visible_24)}" fill="none" stroke="#f59e0b" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+      <polyline points="{_points_attr(visible_22)}" fill="none" stroke="#22c55e" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+      {''.join(circles)}
+      {marker}
+      {''.join(x_labels)}
+    </svg>"""
+
+
+def _visible_points(points: list[tuple[float, float]], progress: float) -> list[tuple[float, float]]:
+    if len(points) < 2 or progress <= 0:
+        return points[:1]
+    max_segments = len(points) - 1
+    exact_segments = progress * max_segments
+    full_segments = int(exact_segments)
+    partial = exact_segments - full_segments
+    visible = points[: full_segments + 1]
+    if full_segments < max_segments:
+        x1, y1 = points[full_segments]
+        x2, y2 = points[full_segments + 1]
+        visible.append((x1 + (x2 - x1) * partial, y1 + (y2 - y1) * partial))
+    return visible
+
+
+def _points_attr(points: list[tuple[float, float]]) -> str:
+    return " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+
+
+def _frame_data_url(frame: np.ndarray) -> str:
+    image = Image.fromarray(frame).convert("RGB")
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=85)
+    encoded = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
 
 
 def _build_trend_frame(
@@ -602,6 +987,16 @@ def _first_existing(*paths: str) -> str | None:
 
 def _regional_labels(language: str) -> dict:
     return REGIONAL_VIDEO_LABELS.get(language, REGIONAL_VIDEO_LABELS["hindi"])
+
+
+def _regional_font_stack(language: str) -> str:
+    try:
+        from thumbnail_generator import LANG_STRINGS, _css_font_stack
+
+        strings = LANG_STRINGS.get(language, LANG_STRINGS["hindi"])
+        return _css_font_stack(strings["font"])
+    except Exception:
+        return "'Kohinoor Telugu', 'Telugu MN', 'Telugu Sangam MN', 'Noto Sans Telugu'"
 
 
 def _karat_label(language: str, karat: str) -> str:
