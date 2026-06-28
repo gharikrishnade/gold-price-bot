@@ -1,0 +1,15 @@
+.env
+.DS_Store
+__pycache__/
+*.py[cod]
+
+credentials/
+logs/
+output/
+
+*.mp3
+*.mp4
+*.wav
+*.jpg
+*.jpeg
+*.png
