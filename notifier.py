@@ -21,12 +21,14 @@ def send_run_notification(
     *,
     summary_path: str,
     review_summary_path: str,
+    review_page_path: str | None = None,
 ) -> dict[str, Any]:
     """Send configured notifications. Returns per-channel delivery status."""
     message = build_notification_message(
         all_results,
         summary_path=summary_path,
         review_summary_path=review_summary_path,
+        review_page_path=review_page_path,
     )
     statuses = {}
 
@@ -53,6 +55,7 @@ def build_notification_message(
     *,
     summary_path: str,
     review_summary_path: str,
+    review_page_path: str | None = None,
 ) -> str:
     completed = [
         state_key for state_key, result in all_results.items()
@@ -89,6 +92,8 @@ def build_notification_message(
             f"Review summary: {review_summary_path}",
         ]
     )
+    if review_page_path:
+        lines.append(f"Review page: {review_page_path}")
     return "\n".join(lines)
 
 
