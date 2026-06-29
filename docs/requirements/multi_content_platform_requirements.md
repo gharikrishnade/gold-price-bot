@@ -57,8 +57,8 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 | MOD-STOCK-001 | Stocks module (API data, market calendar) | 5 | P1 | TODO | |
 | MOD-STOCK-002 | Stocks charts & stat cards | 5 | P1 | TODO | |
 | MOD-STOCK-003 | Financial-advice disclaimer | 5 | P0 | TODO | |
-| MOD-HORO-001 | Horoscope module (12 signs, stateless) | 6 | P1 | TODO | |
-| MOD-HORO-002 | Horoscope content-safety framing | 6 | P0 | TODO | |
+| MOD-HORO-001 | Horoscope module (12 signs, stateless) | 6 | P1 | DONE | |
+| MOD-HORO-002 | Horoscope content-safety framing | 6 | P0 | DONE | |
 | OPS-001 | Cost & rate-limit guardrails | 7 | P1 | TODO | |
 | OPS-002 | Observability + failure alerting | 7 | P1 | TODO | |
 | OPS-003 | Multi-channel secrets management | 7 | P1 | TODO | |
@@ -274,7 +274,7 @@ Acceptance criteria:
 
 ### MOD-HORO-001: Horoscope Module — 12 Signs, Stateless
 
-**Phase:** 6 · **Priority:** P1 · **Status:** TODO
+**Phase:** 6 · **Priority:** P1 · **Status:** DONE — modules/horoscope.py: 12 signs, needs_history=False, deterministic daily highlights, shared script engine + template kit (distinct brand). Verified aries long+short end-to-end.
 
 Second new module; validates the no-data / no-history / stateless path.
 
@@ -290,7 +290,7 @@ Acceptance criteria:
 
 ### MOD-HORO-002: Horoscope Content-Safety Framing
 
-**Phase:** 6 · **Priority:** P0 · **Status:** TODO
+**Phase:** 6 · **Priority:** P0 · **Status:** DONE — positive/general guidance, no guaranteed predictions, mandatory 'entertainment only' disclaimer in every script (verified in Hindi output).
 
 Apply a sensitive tone and an "entertainment only" framing/disclaimer.
 

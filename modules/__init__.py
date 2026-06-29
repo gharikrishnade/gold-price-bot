@@ -8,7 +8,9 @@ Tracker: PLAT-001, PLAT-002.
 """
 from modules.base import ContentModule, ValidationResult, REGISTRY, register, get_module
 from modules.gold import GoldModule
+from modules.horoscope import HoroscopeModule
 
 register(GoldModule())
+register(HoroscopeModule())
 
 __all__ = ["ContentModule", "ValidationResult", "REGISTRY", "register", "get_module"]
