@@ -48,7 +48,7 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 | PLAT-003 | Engine delegates to module (no behavior change) | 1 | P0 | DONE | |
 | PLAT-004 | Shared script engine (tone/language as platform asset) | 2 | P0 | DONE | |
 | PLAT-005 | Jobs/Shows config layer | 3 | P0 | DONE | |
-| PLAT-006 | Scheduler / orchestrator for due jobs | 3 | P1 | TODO | |
+| PLAT-006 | Scheduler / orchestrator for due jobs | 3 | P1 | DONE | |
 | PLAT-007 | Optional history per module (`needs_history`) | 1 | P0 | DONE | |
 | PLAT-008 | Generalized dedupe & run keys | 3 | P1 | DONE | |
 | TMPL-001 | Template component library | 4 | P1 | TODO | |
@@ -155,7 +155,7 @@ Acceptance criteria:
 
 ### PLAT-006: Scheduler / Orchestrator
 
-**Phase:** 3 · **Priority:** P1 · **Status:** TODO
+**Phase:** 3 · **Priority:** P1 · **Status:** DONE — `--due` runs jobs whose jobs.yaml `schedule` is within `--window-minutes` of now (single frequent cron); per-job failure isolation; `--list-jobs`
 
 Run jobs by their declared schedule rather than a single daily cron for all states.
 
