@@ -132,6 +132,22 @@ def build_card_html(brand: Brand, content: CardContent, *, fmt: str, width: int,
     title_font = content.title_font_css or css_font_stack(brand.title_font)
     footer_font = content.footer_font_css or css_font_stack(brand.body_font)
 
+    # Card width (to auto-size big values so words like "Confident" don't overflow).
+    pad = px(64 if portrait else 56)
+    gap_px = px(28)
+    inner_pad = px(36)
+    ncards = max(len(content.stats), 1)
+    if portrait:
+        card_w = width - 2 * pad
+    else:
+        card_w = (width - 2 * pad - (ncards - 1) * gap_px) / ncards
+    card_inner = max(card_w - 2 * inner_pad, px(80))
+
+    def _value_px(value: str) -> int:
+        # ~0.62 avg glyph-width ratio for the bold sans; cap at the design size.
+        fit = int(card_inner / (0.62 * max(len(value), 1)))
+        return max(px(34), min(px(120), fit))
+
     accents = [brand.accent_2, brand.accent_3]
     cards_html = ""
     for i, st in enumerate(content.stats):
@@ -141,7 +157,7 @@ def build_card_html(brand: Brand, content: CardContent, *, fmt: str, width: int,
         <div class="card-bar"></div>
         <div class="card-body">
           <div class="card-label">{escape(st.label)}</div>
-          <div class="card-value">{escape(st.value)}</div>
+          <div class="card-value" style="font-size:{_value_px(st.value)}px">{escape(st.value)}</div>
           {f'<div class="card-unit">{escape(st.unit)}</div>' if st.unit else ''}
           {f'<div class="card-foot">{escape(st.footer)}</div>' if st.footer else ''}
         </div>
@@ -154,7 +170,6 @@ def build_card_html(brand: Brand, content: CardContent, *, fmt: str, width: int,
     # Layout differences between formats.
     stats_dir = "column" if portrait else "row"
     title_size = px(108 if portrait else 84)
-    pad = px(64 if portrait else 56)
 
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
   {brand.css_vars()}

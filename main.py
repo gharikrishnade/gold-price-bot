@@ -142,7 +142,8 @@ def run_pipeline_for_channel(
                 f"  ⚠️  Market closed today — using last closing prices "
                 f"from {price_data['cached_date']}"
             )
-        logger.info(f"  ✅ Got data for {len(price_data.get('cities', {}))} cities")
+        n_cities = len(price_data.get("cities", {}))
+        logger.info("  ✅ Data fetched" + (f" ({n_cities} cities)" if n_cities else ""))
     except Exception as e:
         logger.exception(f"  ❌ Fetch failed for {state_key}: {e}")
         result["scrape_status"] = "failed"

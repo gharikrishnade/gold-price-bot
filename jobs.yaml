@@ -104,3 +104,19 @@ jobs:
     formats: [long]
     schedule: "06:30"
     enabled: false
+
+  # ── Daily Horoscope (MOD-HORO) — stateless show, one channel per zodiac sign ──
+  # Disabled by default; enable the signs/language you publish. Add more languages
+  # by giving each its own channel key (e.g. aries_te) and language.
+  - { id: horoscope-aries,       module: horoscope, channel: aries,       language: hindi, youtube_token_file: horoscope_hindi.json, formats: [long, short], schedule: "05:00", enabled: false }
+  - { id: horoscope-taurus,      module: horoscope, channel: taurus,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-gemini,      module: horoscope, channel: gemini,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-cancer,      module: horoscope, channel: cancer,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-leo,         module: horoscope, channel: leo,         language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-virgo,       module: horoscope, channel: virgo,       language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-libra,       module: horoscope, channel: libra,       language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-scorpio,     module: horoscope, channel: scorpio,     language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-sagittarius, module: horoscope, channel: sagittarius, language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-capricorn,   module: horoscope, channel: capricorn,   language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-aquarius,    module: horoscope, channel: aquarius,    language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
+  - { id: horoscope-pisces,      module: horoscope, channel: pisces,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
