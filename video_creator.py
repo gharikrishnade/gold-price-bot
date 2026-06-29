@@ -13,10 +13,12 @@ Output: 1920x1080, H.264
 
 import os
 import sys
+import shutil
 import tempfile
 import logging
 import base64
 import io
+import subprocess
 from html import escape
 import numpy as np
 from pathlib import Path
@@ -33,6 +35,50 @@ ZOOM_START = 1.0
 ZOOM_END   = 1.0    # no zoom — static image with fade in/out only
 TREND_SEGMENT_SECONDS = 12
 TREND_RENDER_FPS = 12
+
+
+def create_avatar_video(image_path, audio_path, output_path, *, width, height):
+    """Lip-synced talking-head video from a portrait image + audio (local SadTalker).
+
+    Returns the output path on success, or None if SadTalker is unavailable/failed so
+    the caller can fall back to the standard card video. The talking head is fitted to
+    width×height with a blurred fill behind it (no ugly solid bars).
+    """
+    from avatar_sadtalker import render_talking_head
+
+    if shutil.which("ffmpeg") is None:
+        logger.warning("ffmpeg not found; cannot compose avatar video.")
+        return None
+
+    with tempfile.TemporaryDirectory(prefix="avatar_") as work:
+        raw = render_talking_head(image_path, audio_path, work)
+        if not raw:
+            return None
+        # Scale-to-fit the talking head, fill the rest with a blurred copy of itself.
+        vf = (
+            f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"boxblur=24:6,crop={width}:{height}[bg];"
+            f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]"
+        )
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            "ffmpeg", "-y", "-i", raw,
+            "-filter_complex", vf, "-map", "[v]", "-map", "0:a?",
+            "-c:v", "libx264", "-crf", "23", "-preset", "medium",
+            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+            output_path,
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        except Exception as e:
+            logger.error(f"Avatar compose (ffmpeg) failed to run ({e}); falling back.")
+            return None
+        if proc.returncode != 0:
+            logger.error(f"Avatar compose ffmpeg exited {proc.returncode}; falling back.\n{proc.stderr[-600:]}")
+            return None
+    logger.info(f"  ✅ Avatar video: {output_path} ({width}×{height})")
+    return output_path
 
 
 def _import_moviepy():

@@ -108,7 +108,7 @@ jobs:
   # ── Daily Horoscope (MOD-HORO) — stateless show, one channel per zodiac sign ──
   # Disabled by default; enable the signs/language you publish. Add more languages
   # by giving each its own channel key (e.g. aries_te) and language.
-  - { id: horoscope-aries,       module: horoscope, channel: aries,       language: hindi, youtube_token_file: horoscope_hindi.json, formats: [long, short], schedule: "05:00", enabled: false }
+  - { id: horoscope-aries,       module: horoscope, channel: aries,       language: hindi, youtube_token_file: horoscope_hindi.json, formats: [long, short], schedule: "05:00", enabled: false, video_style: avatar, avatar_image: assets/avatars/horoscope_sage.jpg }
   - { id: horoscope-taurus,      module: horoscope, channel: taurus,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
   - { id: horoscope-gemini,      module: horoscope, channel: gemini,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
   - { id: horoscope-cancer,      module: horoscope, channel: cancer,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }

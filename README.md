@@ -209,6 +209,38 @@ EMAIL_TO=operator@example.com,backup@example.com
 
 Daily run notifications include completed states, failed states, generated video paths, YouTube links when available, and summary paths.
 
+## Talking-avatar videos (SadTalker)
+
+A job can render a **lip-synced talking-head** from a single portrait image instead of
+the card video — driven by the same regional Sarvam audio. It runs locally via
+[SadTalker](https://github.com/OpenTalker/SadTalker) (no per-video cost).
+
+Enable it on a job in `jobs.yaml`:
+
+```yaml
+- { id: horoscope-aries, module: horoscope, channel: aries, language: hindi,
+    formats: [long, short], video_style: avatar,
+    avatar_image: assets/avatars/horoscope_sage.jpg, enabled: false }
+```
+
+Setup:
+
+1. Clone SadTalker and download its checkpoints (see its README). It has heavy deps
+   (torch, etc.) — keep it in its **own** virtualenv.
+2. Drop your portrait at `assets/avatars/horoscope_sage.jpg` (front-facing, clear face).
+3. Point the bot at it via env:
+
+   ```bash
+   SADTALKER_DIR=/path/to/SadTalker
+   SADTALKER_PYTHON=/path/to/SadTalker/venv/bin/python
+   SADTALKER_ENHANCER=gfpgan        # optional, sharper but slower
+   ```
+
+The talking head is fitted to 1920×1080 (long) or 1080×1920 (Shorts) with a blurred
+fill. **If `SADTALKER_DIR` is unset or a render fails, the job automatically falls back
+to the standard card video** — nothing breaks. A GPU is strongly recommended; CPU works
+but is slow.
+
 ## VPS Deployment
 
 The included `setup_vps.sh` installs system dependencies, creates a virtual environment, installs Python dependencies, creates output/log/credential folders, and installs a daily cron job.
