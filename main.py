@@ -46,6 +46,7 @@ logger = logging.getLogger("main")
 
 from config import DEFAULT_UPLOAD_PRIVACY
 from modules import get_module
+from jobs_config import load_jobs, get_job
 from tts_generator import generate_voiceover
 from video_creator import create_vertical_video, create_video, save_trend_preview
 from youtube_uploader import upload_video
@@ -299,7 +300,8 @@ def run_pipeline_for_channel(
         )
         return result
 
-    existing_upload = _find_existing_upload(state_key, today_str)
+    run_key = _run_key(module.key, state_key)
+    existing_upload = _find_existing_upload(run_key, today_str)
     if existing_upload and not force_upload:
         result["upload_status"] = "skipped"
         result["upload_skip_reason"] = "duplicate_upload_protection"
@@ -325,7 +327,7 @@ def run_pipeline_for_channel(
         result["youtube_video_id"] = video_id
         result["youtube_url"] = f"https://youtu.be/{video_id}"
         result["upload_status"] = "success"
-        _record_upload(state_key, today_str, video_id, result["youtube_url"], privacy_status)
+        _record_upload(run_key, today_str, video_id, result["youtube_url"], privacy_status)
         logger.info(f"  ✅ Live: https://youtu.be/{video_id}")
     except Exception as e:
         logger.exception(f"  ❌ Upload failed for {state_key}: {e}")
@@ -418,7 +420,7 @@ def _upload_short_video(
     """Upload the vertical Short to YouTube. Mirrors Step 6 but targets the shorts file.
 
     Assumes dry_run / skip_upload are already handled by the caller. Short uploads are
-    tracked under a ``<state>__shorts`` history key so they don't clash with the long video.
+    tracked under a ``<module>:<channel>__shorts`` history key so they don't clash with the long video.
     """
     if require_approval and not _upload_approved(artifact_dir):
         marker_path = _approval_marker_path(artifact_dir)
@@ -432,7 +434,7 @@ def _upload_short_video(
         )
         return
 
-    short_key = f"{state_key}__shorts"
+    short_key = f"{_run_key(module.key, state_key)}__shorts"
     existing_upload = _find_existing_upload(short_key, today_str)
     if existing_upload and not force_upload:
         result["upload_status"] = "skipped"
@@ -537,6 +539,11 @@ def _load_upload_history() -> dict:
     return {}
 
 
+def _run_key(module_key: str, channel: str) -> str:
+    """Dedupe/history key that is unique across modules (PLAT-008)."""
+    return f"{module_key}:{channel}"
+
+
 def _find_existing_upload(state_key: str, run_date: str) -> dict | None:
     return _load_upload_history().get(run_date, {}).get(state_key)
 
@@ -555,7 +562,8 @@ def _record_upload(state_key: str, run_date: str, video_id: str, url: str, priva
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate and optionally upload regional content videos.")
-    parser.add_argument("--module", default="gold", help="Content module / show to run (default: gold).")
+    parser.add_argument("--job", help="Run a single job by id from jobs.yaml (overrides --module/--state).")
+    parser.add_argument("--module", help="Run only jobs for this content module / show (default: all modules).")
     parser.add_argument("--dry-run", action="store_true", help="Generate local artifacts but skip YouTube upload.")
     parser.add_argument("--skip-upload", action="store_true", help="Skip YouTube upload after local video generation.")
     parser.add_argument("--force-upload", action="store_true", help="Allow uploading even if this state/date was already uploaded.")
@@ -579,56 +587,97 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _select_jobs(args) -> list:
+    """Pick which jobs to run from jobs.yaml based on CLI filters.
+
+    --job selects one job explicitly (even if disabled). Otherwise start from all
+    jobs, narrow by --module and/or --state (channel); --state is treated as an
+    explicit selection so a disabled channel can still be run on demand. With no
+    filters, run every enabled job.
+    """
+    jobs = load_jobs()
+    if args.job:
+        return [get_job(args.job)]
+    if args.module:
+        jobs = [j for j in jobs if j.module == args.module]
+    if args.state:
+        selected = [j for j in jobs if j.channel == args.state]
+        if not selected:
+            scope = f" for module '{args.module}'" if args.module else ""
+            channels = ", ".join(sorted({j.channel for j in jobs})) or "none"
+            raise KeyError(f"No job with channel '{args.state}'{scope}. Channels: {channels}")
+        return selected
+    return [j for j in jobs if j.enabled]
+
+
+def _resolve_formats(args, job) -> tuple[bool, bool]:
+    """Decide (create_shorts, shorts_only). CLI flags win; else use the job's formats."""
+    if args.shorts_only:
+        return True, True
+    if args.shorts:
+        return True, False
+    formats = job.formats or ["long"]
+    if formats == ["short"]:
+        return True, True          # short-only job
+    if "short" in formats:
+        return True, False         # long + short
+    return False, False            # long only
+
+
 def main(argv: list[str] | None = None):
     args = _parse_args(argv)
     try:
-        module = get_module(args.module)
-    except KeyError as e:
+        jobs = _select_jobs(args)
+    except (KeyError, FileNotFoundError, ValueError) as e:
         logger.error(str(e).strip('"'))
         return 2
-    logger.info(f"🚀 Content bot starting — {module.key} — {today_str}")
+    if not jobs:
+        logger.error("No matching jobs to run (check jobs.yaml and your filters).")
+        return 2
+
+    logger.info(f"🚀 Content bot starting — {today_str}")
     logger.info(
-        f"Options: module={args.module}, dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
-        f"channel={args.state or 'enabled'}, privacy={args.privacy}, "
-        f"force_upload={args.force_upload}, require_approval={args.require_approval}, "
-        f"shorts={args.shorts}, shorts_only={args.shorts_only}, "
-        f"trend_cards={args.trend_cards}, notify={not args.no_notify}"
+        f"Options: job={args.job or '-'}, module={args.module or 'all'}, "
+        f"channel={args.state or '-'}, dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
+        f"privacy={args.privacy}, force_upload={args.force_upload}, "
+        f"require_approval={args.require_approval}, shorts={args.shorts}, "
+        f"shorts_only={args.shorts_only}, trend_cards={args.trend_cards}, notify={not args.no_notify}"
     )
+    logger.info("Jobs to process: " + ", ".join(j.id for j in jobs))
 
-    available = module.channels()
-    if args.state:
-        # Allow explicitly selecting a channel even if it is disabled, as long as it exists.
+    # Resolve modules and run preflight per module on its selected channels.
+    from collections import defaultdict
+    channels_by_module: dict[str, list[str]] = defaultdict(list)
+    for j in jobs:
+        channels_by_module[j.module].append(j.channel)
+    modules_by_key = {}
+    for mkey, chans in channels_by_module.items():
         try:
-            module.channel_meta(args.state)
-        except KeyError:
-            logger.error(
-                f"Unknown channel '{args.state}' for module '{module.key}'. "
-                f"Available: {', '.join(available)}"
-            )
+            modules_by_key[mkey] = get_module(mkey)
+        except KeyError as e:
+            logger.error(str(e).strip('"'))
             return 2
-        channels = [args.state]
-    else:
-        channels = available
-
-    logger.info(f"Channels to process: {channels}")
-    if not module.preflight(channels):
-        return 1
+        if not modules_by_key[mkey].preflight(chans):
+            return 1
 
     all_results = {}
-    for state_key in channels:
+    for j in jobs:
+        module = modules_by_key[j.module]
+        create_shorts, shorts_only = _resolve_formats(args, j)
         result = run_pipeline_for_channel(
             module,
-            state_key,
+            j.channel,
             dry_run=args.dry_run,
             skip_upload=args.skip_upload,
             privacy_status=args.privacy,
             force_upload=args.force_upload,
-            create_shorts=args.shorts,
-            shorts_only=args.shorts_only,
+            create_shorts=create_shorts,
+            shorts_only=shorts_only,
             trend_cards=args.trend_cards,
             require_approval=args.require_approval,
         )
-        all_results[state_key] = result
+        result["job_id"] = j.id
+        all_results[j.id] = result
 
     # Save summary
     summary_path = f"{LOG_DIR}/summary_{today_str}.json"

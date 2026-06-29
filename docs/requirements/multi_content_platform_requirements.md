@@ -47,10 +47,10 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 | PLAT-002 | Extract Gold into a module | 1 | P0 | DONE | |
 | PLAT-003 | Engine delegates to module (no behavior change) | 1 | P0 | DONE | |
 | PLAT-004 | Shared script engine (tone/language as platform asset) | 2 | P0 | DONE | |
-| PLAT-005 | Jobs/Shows config layer | 3 | P0 | TODO | |
+| PLAT-005 | Jobs/Shows config layer | 3 | P0 | DONE | |
 | PLAT-006 | Scheduler / orchestrator for due jobs | 3 | P1 | TODO | |
 | PLAT-007 | Optional history per module (`needs_history`) | 1 | P0 | DONE | |
-| PLAT-008 | Generalized dedupe & run keys | 3 | P1 | TODO | |
+| PLAT-008 | Generalized dedupe & run keys | 3 | P1 | DONE | |
 | TMPL-001 | Template component library | 4 | P1 | TODO | |
 | TMPL-002 | Per-show branding system | 4 | P1 | TODO | |
 | MOD-GOLD-001 | Gold module parity after refactor | 1 | P0 | DONE | |
@@ -138,7 +138,7 @@ Acceptance criteria:
 
 ### PLAT-005: Jobs / Shows Config Layer
 
-**Phase:** 3 · **Priority:** P0 · **Status:** TODO
+**Phase:** 3 · **Priority:** P0 · **Status:** DONE — jobs.yaml + jobs_config.py; CHANNEL_CONFIG derived from gold jobs; engine runs from jobs with --job/--module/--state filters and per-job formats
 
 Replace `CHANNEL_CONFIG` (state→language) with a data-driven jobs config (YAML/JSON or DB) so new shows
 can be added without code changes.
@@ -185,7 +185,7 @@ Acceptance criteria:
 
 ### PLAT-008: Generalized Dedupe & Run Keys
 
-**Phase:** 3 · **Priority:** P1 · **Status:** TODO
+**Phase:** 3 · **Priority:** P1 · **Status:** DONE — upload-history keys are now <module>:<channel> (and __shorts), unique across modules
 
 Generalize duplicate-upload protection and artifact keys beyond gold (already started with the
 `<state>__shorts` key).
