@@ -1,0 +1,106 @@
+# jobs.yaml — Run plan for the content platform (PLAT-005).
+#
+# Each job is ONE channel of ONE show (module). Adding a channel is a YAML edit
+# here — no code change. Adding a brand-new kind of show also needs a content
+# module under modules/, but its channels are still listed here.
+#
+# Fields:
+#   id                unique job id
+#   module            content module key (e.g. "gold")
+#   channel           channel key passed to the module (e.g. a state)
+#   language          script + voice language
+#   region_name       human-readable region (used in prompts/templates)
+#   youtube_token_file OAuth token filename under credentials/youtube/
+#   channel_id_env    env var holding the YouTube channel id (optional)
+#   formats           [long], [short], or [long, short]
+#   schedule          local HH:MM hint for the future scheduler (PLAT-006)
+#   enabled           run by default when true
+
+jobs:
+  - id: gold-tamil-nadu
+    module: gold
+    channel: tamil_nadu
+    language: tamil
+    region_name: Tamil Nadu
+    youtube_token_file: tamil_nadu.json
+    channel_id_env: YT_CHANNEL_TAMIL
+    formats: [long]
+    schedule: "06:30"
+    enabled: false
+
+  - id: gold-andhra-pradesh
+    module: gold
+    channel: andhra_pradesh
+    language: telugu
+    region_name: Andhra Pradesh
+    youtube_token_file: andhra_pradesh.json
+    channel_id_env: YT_CHANNEL_TELUGU_AP
+    formats: [long]
+    schedule: "06:30"
+    enabled: true
+
+  - id: gold-telangana
+    module: gold
+    channel: telangana
+    language: telugu
+    region_name: Telangana
+    youtube_token_file: telangana.json
+    channel_id_env: YT_CHANNEL_TELUGU_TS
+    formats: [long]
+    schedule: "06:30"
+    enabled: true
+
+  - id: gold-karnataka
+    module: gold
+    channel: karnataka
+    language: kannada
+    region_name: Karnataka
+    youtube_token_file: karnataka.json
+    channel_id_env: YT_CHANNEL_KANNADA
+    formats: [long]
+    schedule: "06:30"
+    enabled: false
+
+  - id: gold-kerala
+    module: gold
+    channel: kerala
+    language: malayalam
+    region_name: Kerala
+    youtube_token_file: kerala.json
+    channel_id_env: YT_CHANNEL_MALAYALAM
+    formats: [long]
+    schedule: "06:30"
+    enabled: false
+
+  - id: gold-maharashtra
+    module: gold
+    channel: maharashtra
+    language: marathi
+    region_name: Maharashtra
+    youtube_token_file: maharashtra.json
+    channel_id_env: YT_CHANNEL_MARATHI
+    formats: [long]
+    schedule: "06:30"
+    enabled: false
+
+  - id: gold-west-bengal
+    module: gold
+    channel: west_bengal
+    language: bengali
+    region_name: West Bengal
+    youtube_token_file: west_bengal.json
+    channel_id_env: YT_CHANNEL_BENGALI
+    formats: [long]
+    schedule: "06:30"
+    enabled: false
+
+  - id: gold-delhi
+    module: gold
+    channel: delhi
+    language: hindi
+    region_name: Delhi / North India
+    youtube_token_file: hindi_north.json
+    channel_id_env: YT_CHANNEL_HINDI
+    formats: [long]
+    schedule: "06:30"
+    enabled: false
