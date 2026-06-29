@@ -564,6 +564,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate and optionally upload regional content videos.")
     parser.add_argument("--job", help="Run a single job by id from jobs.yaml (overrides --module/--state).")
     parser.add_argument("--module", help="Run only jobs for this content module / show (default: all modules).")
+    parser.add_argument("--due", action="store_true", help="Run only enabled jobs scheduled around now (for cron). See --window-minutes.")
+    parser.add_argument("--window-minutes", type=int, default=30, help="Schedule tolerance for --due, in minutes (default: 30).")
+    parser.add_argument("--list-jobs", action="store_true", help="List configured jobs (id, module, channel, schedule, enabled) and exit.")
     parser.add_argument("--dry-run", action="store_true", help="Generate local artifacts but skip YouTube upload.")
     parser.add_argument("--skip-upload", action="store_true", help="Skip YouTube upload after local video generation.")
     parser.add_argument("--force-upload", action="store_true", help="Allow uploading even if this state/date was already uploaded.")
@@ -587,13 +590,31 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _due_now(job, now, window_minutes: int) -> bool:
+    """True if the job's HH:MM schedule falls in [schedule, schedule + window) of `now`.
+
+    Designed for a single frequent cron (e.g. every 15-30 min) invoking `--due`: each
+    job fires once in the window after its scheduled time. Windows do not wrap midnight.
+    """
+    if not job.schedule:
+        return False
+    try:
+        hh, mm = (int(x) for x in str(job.schedule).split(":"))
+    except (ValueError, TypeError):
+        logger.warning(f"Job '{job.id}': invalid schedule '{job.schedule}' (expected HH:MM); skipping in --due.")
+        return False
+    scheduled = hh * 60 + mm
+    current = now.hour * 60 + now.minute
+    return 0 <= (current - scheduled) < window_minutes
+
+
 def _select_jobs(args) -> list:
     """Pick which jobs to run from jobs.yaml based on CLI filters.
 
     --job selects one job explicitly (even if disabled). Otherwise start from all
-    jobs, narrow by --module and/or --state (channel); --state is treated as an
-    explicit selection so a disabled channel can still be run on demand. With no
-    filters, run every enabled job.
+    jobs, optionally narrowed by --module. --state selects by channel (explicit, so a
+    disabled channel can still be run on demand). --due selects enabled jobs scheduled
+    around now. With no filters, run every enabled job.
     """
     jobs = load_jobs()
     if args.job:
@@ -607,6 +628,9 @@ def _select_jobs(args) -> list:
             channels = ", ".join(sorted({j.channel for j in jobs})) or "none"
             raise KeyError(f"No job with channel '{args.state}'{scope}. Channels: {channels}")
         return selected
+    if getattr(args, "due", False):
+        now = datetime.now()
+        return [j for j in jobs if j.enabled and _due_now(j, now, args.window_minutes)]
     return [j for j in jobs if j.enabled]
 
 
@@ -626,12 +650,30 @@ def _resolve_formats(args, job) -> tuple[bool, bool]:
 
 def main(argv: list[str] | None = None):
     args = _parse_args(argv)
+
+    if args.list_jobs:
+        try:
+            jobs = load_jobs()
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(str(e).strip('"'))
+            return 2
+        print(f"{'JOB ID':28} {'MODULE':8} {'CHANNEL':16} {'SCHED':6} {'FORMATS':14} ENABLED")
+        for j in jobs:
+            print(
+                f"{j.id:28} {j.module:8} {j.channel:16} {str(j.schedule or '-'):6} "
+                f"{','.join(j.formats):14} {'yes' if j.enabled else 'no'}"
+            )
+        return 0
+
     try:
         jobs = _select_jobs(args)
     except (KeyError, FileNotFoundError, ValueError) as e:
         logger.error(str(e).strip('"'))
         return 2
     if not jobs:
+        if args.due:
+            logger.info(f"No jobs due now (window {args.window_minutes}m). Nothing to do.")
+            return 0
         logger.error("No matching jobs to run (check jobs.yaml and your filters).")
         return 2
 
@@ -641,7 +683,8 @@ def main(argv: list[str] | None = None):
         f"channel={args.state or '-'}, dry_run={args.dry_run}, skip_upload={args.skip_upload}, "
         f"privacy={args.privacy}, force_upload={args.force_upload}, "
         f"require_approval={args.require_approval}, shorts={args.shorts}, "
-        f"shorts_only={args.shorts_only}, trend_cards={args.trend_cards}, notify={not args.no_notify}"
+        f"shorts_only={args.shorts_only}, trend_cards={args.trend_cards}, "
+        f"due={args.due}, notify={not args.no_notify}"
     )
     logger.info("Jobs to process: " + ", ".join(j.id for j in jobs))
 
@@ -664,18 +707,23 @@ def main(argv: list[str] | None = None):
     for j in jobs:
         module = modules_by_key[j.module]
         create_shorts, shorts_only = _resolve_formats(args, j)
-        result = run_pipeline_for_channel(
-            module,
-            j.channel,
-            dry_run=args.dry_run,
-            skip_upload=args.skip_upload,
-            privacy_status=args.privacy,
-            force_upload=args.force_upload,
-            create_shorts=create_shorts,
-            shorts_only=shorts_only,
-            trend_cards=args.trend_cards,
-            require_approval=args.require_approval,
-        )
+        try:
+            result = run_pipeline_for_channel(
+                module,
+                j.channel,
+                dry_run=args.dry_run,
+                skip_upload=args.skip_upload,
+                privacy_status=args.privacy,
+                force_upload=args.force_upload,
+                create_shorts=create_shorts,
+                shorts_only=shorts_only,
+                trend_cards=args.trend_cards,
+                require_approval=args.require_approval,
+            )
+        except Exception as e:
+            # Isolate per-job failures so one bad job can't abort the rest of the run.
+            logger.exception(f"  ❌ Job '{j.id}' crashed unexpectedly: {e}")
+            result = {"job_id": j.id, "module": j.module, "state_key": j.channel, "error": f"job_crashed: {e}"}
         result["job_id"] = j.id
         all_results[j.id] = result
 

@@ -221,6 +221,26 @@ Default cron timing:
 
 That runs at 2:00 AM UTC, which is 7:30 AM IST.
 
+### Per-job scheduling
+
+Jobs are defined in `jobs.yaml`, and each job has its own `schedule` (local `HH:MM`).
+Instead of one cron that runs everything at a fixed time, install a single frequent
+cron that asks for whatever is *due now*:
+
+```cron
+*/15 * * * * cd /path/to/gold-price-bot && /path/to/venv/bin/python main.py --due >> logs/cron.log 2>&1
+```
+
+`--due` runs only the enabled jobs whose `schedule` falls within `--window-minutes`
+(default 30) of the current time, so a job at `06:30` and a job at `16:00` each fire
+at their own time from the same cron. When nothing is due, the run exits cleanly (0).
+
+Inspect the run plan with:
+
+```bash
+python main.py --list-jobs
+```
+
 Before enabling public publishing on a VPS, run:
 
 ```bash
