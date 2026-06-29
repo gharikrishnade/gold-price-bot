@@ -463,8 +463,11 @@ def _telugu_reference_portrait_html(data: dict, width: int, height: int) -> str:
     number = str(data["lucky_number"])
     direction = details.get("direction", "తూర్పు")
     reg = css_font_stack(",".join(FONT_CANDIDATES.get("telugu", ["Noto Sans Telugu"])))
-    sage_src = _image_data_uri("assets/horoscope/telugu_sage_reference.png", "assets/avatars/horoscope_sage.png")
-    ram_src = _image_data_uri("assets/horoscope/aries_ram_reference.png")
+    sage_src = _image_data_uri("assets/horoscope/telugu_sage_reference.png", "assets/horoscope/icons/saint_guru.png", "assets/avatars/horoscope_sage.png")
+    ram_src = _image_data_uri("assets/horoscope/aries_ram_reference.png", "assets/horoscope/icons/aries.png")
+    calendar_src = _image_data_uri("assets/horoscope/icons/calendar.png")
+    diya_src = _image_data_uri("assets/horoscope/icons/diya.png")
+    trident_src = _image_data_uri("assets/horoscope/icons/trident.png")
 
     sc = width / 1080
     def px(v): return round(v * sc)
@@ -477,17 +480,19 @@ def _telugu_reference_portrait_html(data: dict, width: int, height: int) -> str:
     english = escape(data.get("sign_display", sign.title()).upper())
 
     rows = [
-        ("briefcase", L["career"], predictions.get("career", "")),
-        ("coins", L["finance"], predictions.get("finance", "")),
-        ("heart", "ప్రేమ", predictions.get("love", "")),
-        ("cross", L["health"], predictions.get("health", "")),
+        ("career.png", L["career"], predictions.get("career", "")),
+        ("finance.png", L["finance"], predictions.get("finance", "")),
+        ("love.png", "ప్రేమ", predictions.get("love", "")),
+        ("health.png", L["health"], predictions.get("health", "")),
     ]
     rows_html = "".join(
-        f"""<div class="pred-row">
-      <div class="pred-label"><div class="icon {icon}"></div><strong>{escape(label)}</strong></div>
+        (
+            lambda icon_src, label=label, text=text: f"""<div class="pred-row">
+      <div class="pred-label">{f'<img src="{icon_src}" alt="">' if icon_src else '<span class="icon-fallback">✦</span>'}<strong>{escape(label)}</strong></div>
       <div class="pred-text">{escape(text)}</div>
     </div>"""
-        for icon, label, text in rows
+        )(_image_data_uri(f"assets/horoscope/icons/{icon_name}"))
+        for icon_name, label, text in rows
     )
 
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -517,10 +522,9 @@ def _telugu_reference_portrait_html(data: dict, width: int, height: int) -> str:
     color:#fff8e8; font-size:{px(32)}px; line-height:1.25; font-weight:900; padding:{px(10)}px {px(24)}px;
     border:{px(2)}px solid #d99a16; border-radius:{px(12)}px; background:rgba(41,7,4,.86);
     box-shadow:0 {px(8)}px {px(18)}px rgba(0,0,0,.34);}}
-  .cal{{width:{px(34)}px;height:{px(34)}px;border:{px(3)}px solid #fff4d6;border-radius:{px(5)}px; position:relative;}}
-  .cal::before{{content:""; position:absolute; left:{px(5)}px; right:{px(5)}px; top:{px(10)}px; border-top:{px(3)}px solid #fff4d6;}}
+  .cal{{width:{px(34)}px;height:{px(34)}px; object-fit:contain;}}
   .sage{{position:absolute; left:{px(12)}px; top:{px(190)}px; width:{px(590)}px; height:{px(780)}px; z-index:2; overflow:hidden;}}
-  .sage img{{width:100%; height:112%; object-fit:cover; object-position:left bottom; transform:translateY({px(-28)}px);}}
+  .sage img{{width:100%; height:112%; object-fit:cover; object-position:center bottom; transform:translateY({px(-28)}px);}}
   .zodiac-faint{{position:absolute; left:{px(330)}px; top:{px(275)}px; width:{px(360)}px; height:{px(360)}px;
     border:{px(2)}px solid rgba(232,169,29,.2); border-radius:50%; z-index:1; opacity:.55;}}
   .zodiac-faint::after{{content:"✦  ✧  ✦  ✧  ✦"; position:absolute; inset:{px(60)}px; border:{px(1)}px solid rgba(232,169,29,.18);
@@ -531,7 +535,7 @@ def _telugu_reference_portrait_html(data: dict, width: int, height: int) -> str:
   .sign-title .eng{{margin-top:{px(6)}px; color:#fff; font-size:{px(38)}px; line-height:1; font-weight:900; letter-spacing:0;}}
   .ram{{position:absolute; top:{px(390)}px; right:{px(70)}px; width:{px(405)}px; height:{px(390)}px; z-index:4;
     display:flex; align-items:center; justify-content:center;}}
-  .ram img{{width:100%; height:100%; object-fit:cover; object-position:center center;}}
+  .ram img{{width:100%; height:100%; object-fit:contain; object-position:center center; filter:drop-shadow(0 0 {px(20)}px rgba(255,184,36,.48));}}
   .ram-glyph{{width:{px(315)}px; height:{px(315)}px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     color:#ffd758; font-size:{px(180)}px; border:{px(6)}px solid #ffd758; background:#5c0b07;}}
   .nak{{position:absolute; top:{px(780)}px; right:{px(54)}px; width:{px(500)}px; z-index:5; text-align:center;
@@ -547,19 +551,10 @@ def _telugu_reference_portrait_html(data: dict, width: int, height: int) -> str:
   .pred-row:last-child{{border-bottom:0;}}
   .pred-label{{background:linear-gradient(90deg, #3e0804, #5a1108); color:#f7c741; display:flex; align-items:center;
     gap:{px(18)}px; padding:0 {px(26)}px; font-size:{px(34)}px; line-height:1.2; font-weight:900;}}
+  .pred-label img{{width:{px(58)}px; height:{px(58)}px; object-fit:contain; flex:0 0 auto; filter:drop-shadow(0 {px(2)}px {px(3)}px rgba(0,0,0,.45));}}
+  .icon-fallback{{width:{px(58)}px; height:{px(58)}px; display:flex; align-items:center; justify-content:center;}}
   .pred-text{{display:flex; align-items:center; padding:{px(8)}px {px(30)}px; color:#2b1208; font-size:{px(25)}px;
     line-height:1.38; font-weight:800; background:rgba(255,255,255,.36);}}
-  .icon{{width:{px(48)}px; height:{px(48)}px; position:relative; flex:0 0 auto;}}
-  .briefcase{{border:{px(3)}px solid #f0b52d; border-radius:{px(7)}px; background:linear-gradient(#a65b12,#e0a12c);}}
-  .briefcase::before{{content:""; position:absolute; left:{px(13)}px; right:{px(13)}px; top:{px(-10)}px; height:{px(12)}px;
-    border:{px(3)}px solid #f0b52d; border-bottom:0; border-radius:{px(7)}px {px(7)}px 0 0;}}
-  .coins::before,.coins::after{{content:""; position:absolute; border-radius:50%; background:linear-gradient(#ffe071,#c77a04);
-    border:{px(2)}px solid #7c4200;}}
-  .coins::before{{width:{px(46)}px;height:{px(24)}px;left:0;bottom:{px(6)}px; box-shadow:{px(14)}px {px(-16)}px 0 #e7a91f;}}
-  .coins::after{{width:{px(38)}px;height:{px(20)}px;left:{px(6)}px;bottom:{px(23)}px;}}
-  .heart::before{{content:"♥"; color:#e31919; -webkit-text-stroke:{px(2)}px #ffd23f; font-size:{px(54)}px; line-height:1;}}
-  .cross{{background:#18a750; border:{px(3)}px solid #ffe071; border-radius:{px(10)}px;}}
-  .cross::before{{content:"✚"; color:white; font-size:{px(44)}px; line-height:{px(48)}px; text-align:center; display:block;}}
   .cards{{position:absolute; left:{px(28)}px; right:{px(28)}px; bottom:{px(22)}px; display:grid; grid-template-columns:1fr 1.15fr; gap:{px(14)}px;}}
   .card{{height:{px(292)}px; border:{px(1)}px solid #d7a64d; border-radius:{px(18)}px; background:#fff6d8; position:relative;
     padding:{px(64)}px {px(30)}px {px(22)}px; color:#4b1308;}}
@@ -571,9 +566,8 @@ def _telugu_reference_portrait_html(data: dict, width: int, height: int) -> str:
   .num{{width:{px(36)}px;height:{px(36)}px;border-radius:50%;background:#8b4813;color:#fff2bf;display:flex;align-items:center;justify-content:center;border:{px(2)}px solid #f5c33c;}}
   .star{{color:#f2b51d;font-size:{px(38)}px;line-height:1;}}
   .tip{{text-align:center; font-size:{px(25)}px; line-height:1.55; font-weight:900; padding-top:{px(12)}px;}}
-  .tip-art{{position:absolute; bottom:{px(30)}px; width:{px(82)}px; height:{px(82)}px; color:#d37a0a;}}
+  .tip-art{{position:absolute; bottom:{px(30)}px; width:{px(82)}px; height:{px(82)}px; object-fit:contain; filter:drop-shadow(0 {px(3)}px {px(4)}px rgba(0,0,0,.28));}}
   .tip-art.left{{left:{px(28)}px;}} .tip-art.right{{right:{px(28)}px;}}
-  .tip-art::before{{content:"♜"; font-size:{px(74)}px;}}
   .footer{{position:absolute; left:{px(28)}px; right:{px(28)}px; bottom:{px(14)}px; height:{px(82)}px; z-index:7;
     color:#f6c236; display:flex; align-items:center; justify-content:center; gap:{px(28)}px; font-size:{px(38)}px;
     line-height:1; font-weight:900; text-shadow:0 {px(3)}px {px(8)}px rgba(0,0,0,.72);}}
@@ -581,7 +575,7 @@ def _telugu_reference_portrait_html(data: dict, width: int, height: int) -> str:
   <div class="corner c1">⌜</div><div class="corner c2">⌜</div><div class="corner c3">⌜</div><div class="corner c4">⌜</div>
   <div class="title">{escape(L["title"])}</div>
   <div class="orn-line"></div>
-  <div class="date-pill"><div class="cal"></div><span>{date_text}</span><span>|</span><span>{weekday}</span></div>
+  <div class="date-pill">{f'<img class="cal" src="{calendar_src}" alt="">' if calendar_src else '<span>▣</span>'}<span>{date_text}</span><span>|</span><span>{weekday}</span></div>
   <div class="zodiac-faint"></div>
   <div class="sage">{sage_html}</div>
   <div class="sign-title"><div class="tel">{escape(sign_name)} రాశి</div><div class="eng">({english})</div></div>
@@ -598,7 +592,8 @@ def _telugu_reference_portrait_html(data: dict, width: int, height: int) -> str:
       </div>
       <div class="card">
         <div class="card-title">చిట్కా</div>
-        <div class="tip-art left"></div><div class="tip-art right"></div>
+        {f'<img class="tip-art left" src="{diya_src}" alt="">' if diya_src else ''}
+        {f'<img class="tip-art right" src="{trident_src}" alt="">' if trident_src else ''}
         <div class="tip">{escape(details.get("deity", ""))}ని ఆరాధించండి.<br>{escape(details.get("mantra", ""))} అని<br>11 సార్లు జపించండి.</div>
       </div>
     </div>
