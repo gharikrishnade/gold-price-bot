@@ -225,14 +225,23 @@ Enable it on a job in `jobs.yaml`:
 
 Setup:
 
-1. Clone SadTalker and download its checkpoints (see its README). It has heavy deps
-   (torch, etc.) — keep it in its **own** virtualenv.
+1. Install SadTalker on a machine with a **GPU and a few GB of free disk** (a GPU-less
+   laptop is not suitable — CPU renders are very slow). The included helper does the
+   clone + venv + deps + checkpoint download and prints the env lines:
+
+   ```bash
+   ./setup_sadtalker.sh                 # installs to ./vendor/SadTalker
+   # or: ./setup_sadtalker.sh /opt/SadTalker
+   ```
+
+   (Or follow SadTalker's own README; keep it in its **own** virtualenv — it pins old
+   torch and is happiest on Python 3.10.)
 2. Drop your portrait at `assets/avatars/horoscope_sage.jpg` (front-facing, clear face).
-3. Point the bot at it via env:
+3. Point the bot at it via env (the installer prints these):
 
    ```bash
    SADTALKER_DIR=/path/to/SadTalker
-   SADTALKER_PYTHON=/path/to/SadTalker/venv/bin/python
+   SADTALKER_PYTHON=/path/to/SadTalker/.venv/bin/python
    SADTALKER_ENHANCER=gfpgan        # optional, sharper but slower
    ```
 
