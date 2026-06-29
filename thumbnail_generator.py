@@ -17,6 +17,8 @@ import subprocess
 from pathlib import Path
 from datetime import date
 
+from template_kit import render_html_to_image, css_font_stack, fit_font_size
+
 logger = logging.getLogger(__name__)
 
 # ── Language data ─────────────────────────────────────────────────────────────
@@ -131,15 +133,9 @@ def ensure_language_font(language: str) -> dict:
     return result
 
 
-def _fit_font_size(text: str, base_size: int, min_size: int, soft_limit: int) -> int:
-    if len(text) <= soft_limit:
-        return base_size
-    overflow = len(text) - soft_limit
-    return max(min_size, base_size - overflow * 2)
-
-
-def _css_font_stack(font_stack: str) -> str:
-    return ", ".join(f"'{font.strip()}'" for font in font_stack.split(",") if font.strip())
+# Shared font helpers (from template_kit); aliased to keep existing call sites.
+_fit_font_size = fit_font_size
+_css_font_stack = css_font_stack
 
 
 def _build_html(language, state_key, price_data, width, height):
@@ -684,17 +680,8 @@ def generate_vertical_thumbnail(
 
 
 def _render_playwright(html, output_path, width, height):
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": width, "height": height})
-        page.set_content(html, wait_until="networkidle")
-        # Give fonts a moment to load
-        page.wait_for_timeout(500)
-        page.screenshot(path=output_path, type="jpeg", quality=95,
-                        clip={"x": 0, "y": 0, "width": width, "height": height})
-        browser.close()
-    logger.info(f"Thumbnail saved via Playwright ({width}×{height}): {output_path}")
+    # Delegate to the shared render primitive (template_kit).
+    return render_html_to_image(html, output_path, width, height)
 
 
 def generate_thumbnail(
