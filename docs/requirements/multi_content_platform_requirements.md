@@ -59,6 +59,7 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 | MOD-STOCK-003 | Financial-advice disclaimer | 5 | P0 | TODO | |
 | MOD-HORO-001 | Horoscope module (12 signs, stateless) | 6 | P1 | DONE | |
 | MOD-HORO-002 | Horoscope content-safety framing | 6 | P0 | DONE | |
+| AVATAR-001 | Talking-avatar videos (local SadTalker) | 6 | P2 | DONE | |
 | OPS-001 | Cost & rate-limit guardrails | 7 | P1 | TODO | |
 | OPS-002 | Observability + failure alerting | 7 | P1 | TODO | |
 | OPS-003 | Multi-channel secrets management | 7 | P1 | TODO | |
@@ -297,6 +298,14 @@ Apply a sensitive tone and an "entertainment only" framing/disclaimer.
 Acceptance criteria:
 
 - Horoscope content avoids harmful determinism (health/finance guarantees) and includes the entertainment disclaimer.
+
+### AVATAR-001: Talking-Avatar Videos (local SadTalker)
+
+**Phase:** 6 · **Priority:** P2 · **Status:** DONE — jobs may set `video_style: avatar` + `avatar_image`; the pipeline drives the portrait with the generated Sarvam audio via local SadTalker (avatar_sadtalker.py + video_creator.create_avatar_video), fitted to 16:9/9:16 with a blurred fill. Gated behind `SADTALKER_DIR`; falls back to the card video when unavailable (fallback verified). Actual SadTalker render runs on the operator's GPU box.
+
+Requirements: portrait + our audio → lip-synced video; per-job opt-in; graceful fallback; no per-video cost.
+
+Acceptance: an avatar job produces a talking-head video from the configured image; a non-avatar or unconfigured run is unaffected.
 
 ---
 

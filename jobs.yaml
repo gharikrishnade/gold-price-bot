@@ -108,6 +108,10 @@ jobs:
   # ── Daily Horoscope (MOD-HORO) — stateless show, one channel per zodiac sign ──
   # Disabled by default; enable the signs/language you publish. Add more languages
   # by giving each its own channel key (e.g. aries_te) and language.
+  # Talking-avatar mode (SadTalker) needs a GPU box to be practical — CPU is ~hours
+  # per clip. To enable it there, add to a job:
+  #     video_style: avatar, avatar_image: assets/avatars/horoscope_sage.jpg
+  # Until then these use the fast card video (the default).
   - { id: horoscope-aries,       module: horoscope, channel: aries,       language: hindi, youtube_token_file: horoscope_hindi.json, formats: [long, short], schedule: "05:00", enabled: false }
   - { id: horoscope-taurus,      module: horoscope, channel: taurus,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }
   - { id: horoscope-gemini,      module: horoscope, channel: gemini,      language: hindi, youtube_token_file: horoscope_hindi.json, formats: [short],       schedule: "05:00", enabled: false }

@@ -34,6 +34,8 @@ class Job:
     formats: list[str] = field(default_factory=lambda: ["long"])
     schedule: str | None = None
     enabled: bool = True
+    video_style: str = "card"        # "card" (Ken Burns) or "avatar" (talking head)
+    avatar_image: str | None = None  # portrait image path for video_style: avatar
 
 
 def _load_raw(path=None) -> list[dict]:
@@ -78,6 +80,8 @@ def _parse_job(entry: dict, index: int) -> Job:
         formats=list(formats),
         schedule=entry.get("schedule"),
         enabled=bool(entry.get("enabled", True)),
+        video_style=str(entry.get("video_style", "card")),
+        avatar_image=entry.get("avatar_image"),
     )
 
 

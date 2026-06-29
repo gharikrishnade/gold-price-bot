@@ -48,7 +48,7 @@ from config import DEFAULT_UPLOAD_PRIVACY
 from modules import get_module
 from jobs_config import load_jobs, get_job
 from tts_generator import generate_voiceover
-from video_creator import create_vertical_video, create_video, save_trend_preview
+from video_creator import create_vertical_video, create_video, save_trend_preview, create_avatar_video
 from youtube_uploader import upload_video
 from notifier import notifications_enabled, send_run_notification
 from review_page import write_review_page
@@ -77,10 +77,13 @@ def run_pipeline_for_channel(
     shorts_only: bool = False,
     trend_cards: bool = False,
     require_approval: bool = DEFAULT_REQUIRE_UPLOAD_APPROVAL,
+    video_style: str = "card",
+    avatar_image: str | None = None,
 ) -> dict:
     """Run the full pipeline for one channel of the given content module."""
     if shorts_only:
         create_shorts = True
+    use_avatar = video_style == "avatar" and bool(avatar_image)
     config = module.channel_meta(state_key)
     language = module.language_for(state_key)
     started_at = datetime.now().isoformat(timespec="seconds")
@@ -168,7 +171,8 @@ def run_pipeline_for_channel(
         logger.info("Shorts-only mode: skipping long landscape script/thumbnail/voiceover/video.")
         for skipped in ("script_generation_status", "thumbnail_status", "audio_status", "video_status"):
             result[skipped] = "skipped_shorts_only"
-        _create_shorts_video(result, artifact_dir, module, state_key, price_data)
+        _create_shorts_video(result, artifact_dir, module, state_key, price_data,
+                             use_avatar=use_avatar, avatar_image=avatar_image)
 
         # ── Step 6: Upload the Short ───────────────────────────────────────────
         if dry_run or skip_upload:
@@ -256,15 +260,25 @@ def run_pipeline_for_channel(
             else:
                 result["trend_cards_status"] = "skipped_no_history"
 
-        create_video(
-            thumbnail_path=thumb_for_video,
-            audio_path=audio_path,
-            output_path=video_path,
-            price_data=price_data,
-            language=language,
-            state_key=state_key,
-            enable_trend_cards=trend_cards,
-        )
+        made_avatar = False
+        if use_avatar:
+            logger.info(f"  Avatar mode: rendering talking head from {avatar_image}")
+            if create_avatar_video(avatar_image, audio_path, video_path, width=1920, height=1080):
+                made_avatar = True
+                result["video_style"] = "avatar"
+            else:
+                logger.warning("  Avatar render unavailable — falling back to card video.")
+        if not made_avatar:
+            create_video(
+                thumbnail_path=thumb_for_video,
+                audio_path=audio_path,
+                output_path=video_path,
+                price_data=price_data,
+                language=language,
+                state_key=state_key,
+                enable_trend_cards=trend_cards,
+            )
+            result["video_style"] = "card"
         result["video_path"] = video_path
         size_mb = Path(video_path).stat().st_size / (1024 * 1024)
         result["video_size_mb"] = round(size_mb, 2)
@@ -279,7 +293,8 @@ def run_pipeline_for_channel(
 
     if create_shorts:
         logger.info("[5b/6] Creating vertical Shorts/Reels video...")
-        _create_shorts_video(result, artifact_dir, module, state_key, price_data)
+        _create_shorts_video(result, artifact_dir, module, state_key, price_data,
+                             use_avatar=use_avatar, avatar_image=avatar_image)
 
     # ── Step 6: Upload to YouTube ─────────────────────────────────────────────
     if dry_run or skip_upload:
@@ -368,7 +383,8 @@ def _write_script_artifact(artifact_dir: Path, script: str) -> str:
     return str(script_path)
 
 
-def _create_shorts_video(result, artifact_dir, module, state_key, price_data):
+def _create_shorts_video(result, artifact_dir, module, state_key, price_data,
+                         *, use_avatar=False, avatar_image=None):
     """Build the vertical Shorts/Reels video: short script + own voiceover + portrait template.
 
     Self-contained — does not depend on the long landscape video's artifacts, so it also
@@ -393,12 +409,19 @@ def _create_shorts_video(result, artifact_dir, module, state_key, price_data):
         module.render_vertical_thumbnail(state_key, price_data, shorts_thumb_path)
         result["shorts_thumbnail_path"] = shorts_thumb_path
 
-        create_vertical_video(
-            thumbnail_path=shorts_thumb_path,
-            audio_path=shorts_audio_path,
-            output_path=shorts_path,
-            vertical_frame_path=shorts_thumb_path,
-        )
+        made_avatar = False
+        if use_avatar and avatar_image:
+            if create_avatar_video(avatar_image, shorts_audio_path, shorts_path, width=1080, height=1920):
+                made_avatar = True
+            else:
+                logger.warning("  Avatar render unavailable for Short — falling back to portrait template.")
+        if not made_avatar:
+            create_vertical_video(
+                thumbnail_path=shorts_thumb_path,
+                audio_path=shorts_audio_path,
+                output_path=shorts_path,
+                vertical_frame_path=shorts_thumb_path,
+            )
         result["shorts_video_path"] = shorts_path
         shorts_size_mb = Path(shorts_path).stat().st_size / (1024 * 1024)
         result["shorts_video_size_mb"] = round(shorts_size_mb, 2)
@@ -720,6 +743,8 @@ def main(argv: list[str] | None = None):
                 shorts_only=shorts_only,
                 trend_cards=args.trend_cards,
                 require_approval=args.require_approval,
+                video_style=j.video_style,
+                avatar_image=j.avatar_image,
             )
         except Exception as e:
             # Isolate per-job failures so one bad job can't abort the rest of the run.
