@@ -51,8 +51,8 @@ are deliberately chosen to stress-test the abstraction (API data + charts; and n
 | PLAT-006 | Scheduler / orchestrator for due jobs | 3 | P1 | DONE | |
 | PLAT-007 | Optional history per module (`needs_history`) | 1 | P0 | DONE | |
 | PLAT-008 | Generalized dedupe & run keys | 3 | P1 | DONE | |
-| TMPL-001 | Template component library | 4 | P1 | TODO | |
-| TMPL-002 | Per-show branding system | 4 | P1 | TODO | |
+| TMPL-001 | Template component library | 4 | P1 | DONE | |
+| TMPL-002 | Per-show branding system | 4 | P1 | DONE | |
 | MOD-GOLD-001 | Gold module parity after refactor | 1 | P0 | DONE | |
 | MOD-STOCK-001 | Stocks module (API data, market calendar) | 5 | P1 | TODO | |
 | MOD-STOCK-002 | Stocks charts & stat cards | 5 | P1 | TODO | |
@@ -200,7 +200,7 @@ Acceptance criteria:
 
 ### TMPL-001: Template Component Library
 
-**Phase:** 4 · **Priority:** P1 · **Status:** TODO
+**Phase:** 4 · **Priority:** P1 · **Status:** DONE — template_kit.py: shared render primitive + font helpers + composable render_card/CardContent/StatCard. Gold consumes the shared render primitive.
 
 Extract shared HTML/CSS components (header, card, portrait frame, footer, logo/coin slot, date pill,
 animated trend/stat chart) so modules compose templates instead of copying CSS.
@@ -211,7 +211,7 @@ Acceptance criteria:
 
 ### TMPL-002: Per-Show Branding System
 
-**Phase:** 4 · **Priority:** P1 · **Status:** TODO
+**Phase:** 4 · **Priority:** P1 · **Status:** DONE — Brand dataclass (palette/fonts/emblem) drives card CSS vars; GOLD_BRAND defined. Verified two distinct brands share the layout.
 
 Allow each show to declare its own logo, color palette, fonts, intro/outro, and background music.
 
